@@ -1,0 +1,1016 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARGOS - Extraction Intelligente de Données</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        /* === VARIABLES === */
+        :root {
+            --blue-dark: #0a1628;
+            --blue-deep: #0d2137;
+            --blue-medium: #1a3a5c;
+            --blue-light: #2d5a87;
+            --blue-bright: #00a8ff;
+            --blue-glow: #00d4ff;
+            --orange-medium: #e67e22;
+            --orange-bright: #ff9500;
+            --orange-glow: #ffb347;
+            --orange-fire: #ff6b35;
+            --white: #ffffff;
+            --gray-light: #b4c7d9;
+            --gray-medium: #6b8299;
+            --glow-orange: 0 0 20px rgba(255, 149, 0, 0.5);
+            --glow-blue: 0 0 20px rgba(0, 168, 255, 0.5);
+            --glow-intense: 0 0 40px rgba(0, 212, 255, 0.3);
+            --transition-fast: 0.2s ease;
+            --transition-medium: 0.3s ease;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue-deep) 50%, #0a0f1a 100%);
+            color: var(--white);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* === ANIMATED BACKGROUND === */
+        .grid-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-image: 
+                linear-gradient(rgba(0, 168, 255, 0.03) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(0, 168, 255, 0.03) 1px, transparent 1px);
+            background-size: 50px 50px;
+            pointer-events: none;
+            z-index: 0;
+            animation: gridMove 20s linear infinite;
+        }
+
+        @keyframes gridMove {
+            0% { background-position: 0 0; }
+            100% { background-position: 50px 50px; }
+        }
+
+        .particles {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px; height: 4px;
+            background: var(--blue-bright);
+            border-radius: 50%;
+            opacity: 0.6;
+            animation: float 15s infinite ease-in-out;
+        }
+
+        .particle:nth-child(odd) { background: var(--orange-bright); }
+        .particle:nth-child(3n) { width: 6px; height: 6px; }
+
+        @keyframes float {
+            0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+            10% { opacity: 0.8; }
+            90% { opacity: 0.8; }
+            100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
+        }
+
+        /* === SCANNING LINES === */
+
+
+        .scan-line:nth-child(2) {
+            animation-delay: 2s;
+        }
+
+        @keyframes scanDown {
+            0% { top: -2px; opacity: 0; }
+            10% { opacity: 0.5; }
+            90% { opacity: 0.5; }
+            100% { top: 100%; opacity: 0; }
+        }
+
+        /* === LAYOUT === */
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        /* === HEADER === */
+        .header { 
+            text-align: center; 
+            margin-bottom: 50px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        @keyframes fadeInDown {
+            from { opacity: 0; transform: translateY(-30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+
+        .title {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 5rem;
+            font-weight: 900;
+            letter-spacing: 20px;
+            background: linear-gradient(135deg, var(--blue-bright) 0%, var(--orange-bright) 50%, var(--orange-glow) 100%);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            filter: drop-shadow(0 0 30px rgba(0, 168, 255, 0.4));
+            animation: titleGlow 4s ease-in-out infinite, gradientShift 6s ease infinite;
+        }
+
+        @keyframes titleGlow {
+            0%, 100% { filter: drop-shadow(0 0 30px rgba(0, 168, 255, 0.4)); }
+            50% { filter: drop-shadow(0 0 50px rgba(255, 149, 0, 0.6)); }
+        }
+
+        @keyframes gradientShift {
+            0%, 100% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+        }
+
+        .subtitle {
+            font-size: 1.2rem;
+            font-weight: 300;
+            color: var(--gray-light);
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            margin-top: 10px;
+            animation: fadeIn 1s ease-out 0.3s both;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .header-decoration {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+            animation: fadeIn 1s ease-out 0.5s both;
+        }
+
+        .header-decoration .line {
+            width: 150px;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--blue-bright), transparent);
+            animation: lineGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes lineGlow {
+            0%, 100% { opacity: 0.5; }
+            50% { opacity: 1; }
+        }
+
+        .header-decoration .diamond {
+            width: 12px; height: 12px;
+            background: var(--orange-bright);
+            transform: rotate(45deg);
+            box-shadow: var(--glow-orange);
+            animation: diamondPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes diamondPulse {
+            0%, 100% { transform: rotate(45deg) scale(1); box-shadow: var(--glow-orange); }
+            50% { transform: rotate(45deg) scale(1.2); box-shadow: 0 0 30px rgba(255, 149, 0, 0.8); }
+        }
+
+        /* === UPLOAD SECTION === */
+        .upload-section {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            margin-bottom: 50px;
+            flex-wrap: wrap;
+        }
+
+        .section-title {
+            width: 100%;
+            text-align: center;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--blue-bright);
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 15px;
+            animation: fadeInUp 0.8s ease-out 0.2s both;
+        }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .section-title .icon { 
+            color: var(--orange-bright); 
+            animation: iconBlink 2s ease-in-out infinite;
+        }
+
+        @keyframes iconBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .upload-card {
+            background: linear-gradient(145deg, rgba(13, 33, 55, 0.8), rgba(10, 22, 40, 0.9));
+            border: 1px solid rgba(0, 168, 255, 0.2);
+            border-radius: 20px;
+            padding: 40px 30px;
+            text-align: center;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            width: 320px;
+            animation: cardAppear 0.6s ease-out both;
+        }
+
+        .upload-card:first-of-type { animation-delay: 0.3s; }
+        .upload-card:last-of-type { animation-delay: 0.5s; }
+
+        @keyframes cardAppear {
+            from { opacity: 0; transform: scale(0.9) translateY(20px); }
+            to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+
+        .upload-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--blue-bright), var(--orange-bright));
+            opacity: 0;
+            transition: var(--transition-medium);
+        }
+
+        /* Scanning effect on cards */
+        .upload-card::after {
+            content: '';
+            position: absolute;
+            top: -100%; left: 0;
+            width: 100%; height: 50%;
+            background: linear-gradient(to bottom, transparent, rgba(0, 168, 255, 0.1), transparent);
+            animation: cardScan 3s ease-in-out infinite;
+            pointer-events: none;
+        }
+
+        @keyframes cardScan {
+            0%, 100% { top: -50%; }
+            50% { top: 100%; }
+        }
+
+        .upload-card:hover {
+            border-color: var(--blue-bright);
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 20px 60px rgba(0, 168, 255, 0.3), var(--glow-intense);
+        }
+
+        .upload-card:hover::before { opacity: 1; }
+
+        .upload-card.dragover {
+            border-color: var(--orange-bright);
+            background: rgba(255, 149, 0, 0.1);
+            box-shadow: var(--glow-orange), 0 0 60px rgba(255, 149, 0, 0.2);
+            transform: scale(1.05);
+        }
+
+        .upload-card.has-file { 
+            border-color: var(--orange-bright); 
+            box-shadow: var(--glow-orange);
+        }
+        .upload-card.has-file::before { opacity: 1; background: var(--orange-bright); }
+
+        .upload-icon {
+            width: 90px; height: 90px;
+            margin: 0 auto 25px;
+            background: linear-gradient(135deg, var(--blue-medium), var(--blue-dark));
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px solid var(--blue-bright);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+
+        /* Rotating ring around icon */
+        .upload-icon::before {
+            content: '';
+            position: absolute;
+            top: -5px; left: -5px;
+            right: -5px; bottom: -5px;
+            border: 2px dashed rgba(0, 168, 255, 0.3);
+            border-radius: 50%;
+            animation: iconRing 10s linear infinite;
+        }
+
+        @keyframes iconRing {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .upload-icon svg {
+            width: 40px; height: 40px;
+            color: var(--blue-bright);
+            transition: all 0.4s ease;
+        }
+
+        .upload-card:hover .upload-icon { 
+            border-color: var(--orange-bright); 
+            box-shadow: var(--glow-orange);
+            transform: scale(1.1);
+        }
+        .upload-card:hover .upload-icon svg { 
+            color: var(--orange-bright); 
+            transform: scale(1.1);
+        }
+        .upload-card:hover .upload-icon::before {
+            border-color: rgba(255, 149, 0, 0.5);
+            animation-duration: 3s;
+        }
+
+        .xml-icon svg { color: var(--orange-bright); }
+        .xml-icon { border-color: var(--orange-bright); }
+        .xml-icon::before { border-color: rgba(255, 149, 0, 0.3); }
+
+        .upload-card h3 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .upload-card p {
+            color: var(--gray-medium);
+            font-size: 0.95rem;
+            margin-bottom: 25px;
+        }
+
+        .upload-btn {
+            background: linear-gradient(135deg, var(--blue-bright), var(--blue-light));
+            color: var(--white);
+            border: none;
+            padding: 14px 35px;
+            border-radius: 30px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            transition: 0.5s;
+        }
+
+        .upload-btn:hover::before { left: 100%; }
+
+        .upload-btn:hover {
+            background: linear-gradient(135deg, var(--orange-bright), var(--orange-medium));
+            box-shadow: var(--glow-orange);
+            transform: scale(1.05);
+        }
+
+        .drag-hint { 
+            color: var(--gray-medium); 
+            font-size: 0.85rem; 
+            margin-top: 15px !important;
+            opacity: 0.7;
+        }
+
+        .file-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 149, 0, 0.1);
+            border: 1px solid var(--orange-bright);
+            border-radius: 10px;
+            display: none;
+            animation: fileInfoAppear 0.4s ease-out;
+        }
+
+        @keyframes fileInfoAppear {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        .file-info.visible { display: block; }
+        .file-info .file-name { color: var(--orange-glow); font-weight: 600; word-break: break-all; }
+        .file-info .file-size { color: var(--gray-light); font-size: 0.85rem; margin-top: 5px; }
+
+        .file-info .remove-file {
+            background: transparent;
+            border: 1px solid var(--orange-fire);
+            color: var(--orange-fire);
+            padding: 5px 15px;
+            border-radius: 15px;
+            margin-top: 10px;
+            cursor: pointer;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 0.85rem;
+            transition: var(--transition-fast);
+        }
+
+        .file-info .remove-file:hover { background: var(--orange-fire); color: var(--white); }
+
+        /* === ANALYZE BUTTON === */
+        .action-section { 
+            text-align: center; 
+            margin-bottom: 40px;
+            animation: fadeInUp 0.8s ease-out 0.6s both;
+        }
+
+        .analyze-btn {
+            background: linear-gradient(135deg, var(--orange-bright), var(--orange-fire));
+            color: var(--white);
+            border: none;
+            padding: 22px 70px;
+            border-radius: 50px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(255, 149, 0, 0.3);
+        }
+
+        .analyze-btn::before {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            transition: 0.6s;
+        }
+
+        .analyze-btn:not(:disabled) {
+            animation: btnPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes btnPulse {
+            0%, 100% { box-shadow: 0 10px 40px rgba(255, 149, 0, 0.3); }
+            50% { box-shadow: 0 15px 60px rgba(255, 149, 0, 0.5); }
+        }
+
+        .analyze-btn:hover:not(:disabled)::before { left: 100%; }
+        .analyze-btn:hover:not(:disabled) {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 20px 60px rgba(255, 149, 0, 0.5);
+        }
+
+        .analyze-btn:disabled {
+            background: linear-gradient(135deg, var(--gray-medium), #4a5568);
+            cursor: not-allowed;
+            box-shadow: none;
+            opacity: 0.6;
+            animation: none;
+        }
+
+        .analyze-btn .btn-content { display: flex; align-items: center; justify-content: center; gap: 15px; }
+        .analyze-btn .btn-icon svg { 
+            width: 28px; height: 28px; 
+            animation: iconRotate 8s linear infinite; 
+        }
+        .analyze-btn:disabled .btn-icon svg { animation: none; }
+
+        @keyframes iconRotate { 
+            from { transform: rotate(0deg); } 
+            to { transform: rotate(360deg); } 
+        }
+
+        .btn-loader { display: flex; align-items: center; gap: 15px; }
+
+        .spinner {
+            width: 24px; height: 24px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-top-color: var(--white);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* === RESULT === */
+        .result-section { 
+            max-width: 500px; 
+            margin: 0 auto;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .status-card {
+            background: linear-gradient(145deg, rgba(13, 33, 55, 0.9), rgba(10, 22, 40, 0.95));
+            border-radius: 15px;
+            padding: 25px 30px;
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            animation: statusAppear 0.5s ease-out;
+        }
+
+        @keyframes statusAppear {
+            from { opacity: 0; transform: translateY(20px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        .status-card.success { 
+            border: 1px solid #10b981; 
+            box-shadow: 0 0 30px rgba(16, 185, 129, 0.3); 
+        }
+        .status-card.error { 
+            border: 1px solid #ef4444; 
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.3); 
+        }
+        .status-card.loading { 
+            border: 1px solid var(--orange-bright); 
+            box-shadow: var(--glow-orange);
+            animation: statusAppear 0.5s ease-out, loadingPulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loadingPulse {
+            0%, 100% { box-shadow: 0 0 20px rgba(255, 149, 0, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(255, 149, 0, 0.5); }
+        }
+
+        .status-icon {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            flex-shrink: 0;
+        }
+
+        .status-card.success .status-icon { 
+            background: rgba(16, 185, 129, 0.2); 
+            color: #10b981;
+            animation: successBounce 0.5s ease-out;
+        }
+
+        @keyframes successBounce {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        .status-card.error .status-icon { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+        .status-card.loading .status-icon { background: rgba(255, 149, 0, 0.2); color: var(--orange-bright); }
+
+        .status-message { flex: 1; }
+        .status-message h4 { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; margin-bottom: 5px; }
+        .status-message p { color: var(--gray-light); font-size: 0.9rem; }
+
+        .download-section { 
+            text-align: center; 
+            animation: fadeInUp 0.5s ease-out 0.2s both;
+        }
+
+        .download-btn {
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: var(--white);
+            border: none;
+            padding: 18px 50px;
+            border-radius: 50px;
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);
+            animation: downloadPulse 2s ease-in-out infinite;
+        }
+
+        @keyframes downloadPulse {
+            0%, 100% { box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 15px 50px rgba(16, 185, 129, 0.5); }
+        }
+
+        .download-btn:hover { 
+            transform: translateY(-5px) scale(1.05); 
+            box-shadow: 0 20px 50px rgba(16, 185, 129, 0.5); 
+        }
+        .download-btn svg { width: 24px; height: 24px; }
+
+        /* === FOOTER === */
+        .footer { 
+            margin-top: auto; 
+            padding-top: 40px; 
+            text-align: center;
+            animation: fadeIn 1s ease-out 0.8s both;
+        }
+
+        .footer-content { display: flex; align-items: center; justify-content: center; gap: 20px; }
+
+        .footer-line {
+            width: 100px;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--blue-bright), transparent);
+        }
+
+        .footer p { color: var(--gray-medium); font-size: 0.9rem; letter-spacing: 2px; }
+        .footer strong { color: var(--orange-bright); font-family: 'Orbitron', sans-serif; }
+        .footer .netexial { color: var(--blue-bright); }
+
+        /* === RESPONSIVE === */
+        @media (max-width: 768px) {
+            .title { font-size: 3rem; letter-spacing: 10px; }
+            .upload-section { gap: 20px; }
+            .upload-card { width: 100%; max-width: 350px; }
+            .analyze-btn { padding: 18px 40px; font-size: 1rem; }
+        }
+
+        @media (max-width: 480px) {
+            .container { padding: 20px 15px; }
+            .title { font-size: 2.5rem; letter-spacing: 5px; }
+            .upload-card { padding: 30px 20px; }
+            .analyze-btn { padding: 15px 30px; font-size: 0.9rem; }
+        }
+
+        [hidden] { display: none !important; }
+    </style>
+</head>
+<body>
+    <div class="scan-line"></div>
+    <div class="scan-line"></div>
+    <div class="particles" id="particles"></div>
+    <div class="grid-overlay"></div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="logo-container">
+                <h1 class="title">ARGOS</h1>
+            </div>
+            <p class="subtitle">Système d'Extraction Intelligente de Données</p>
+            <div class="header-decoration">
+                <div class="line"></div>
+                <div class="diamond"></div>
+                <div class="line"></div>
+            </div>
+        </header>
+
+        <!-- Upload Section -->
+        <main>
+            <div class="upload-section">
+                <h2 class="section-title">
+                    <span class="icon">◈</span> Téléverser les Fichiers <span class="icon">◈</span>
+                </h2>
+
+                <!-- Source File -->
+                <div class="upload-card" id="sourceDropZone">
+                    <div class="upload-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                            <polyline points="14 2 14 8 20 8"></polyline>
+                            <line x1="12" y1="18" x2="12" y2="12"></line>
+                            <line x1="9" y1="15" x2="12" y2="12"></line>
+                            <line x1="15" y1="15" x2="12" y2="12"></line>
+                        </svg>
+                    </div>
+                    <h3>Document Source</h3>
+                    <p>PDF, Image, Word, Fichier texte</p>
+                    <input type="file" id="sourceFile" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" hidden>
+                    <button class="upload-btn" onclick="document.getElementById('sourceFile').click()">Parcourir</button>
+                    <p class="drag-hint">ou glisser-déposer ici</p>
+                    <div class="file-info" id="sourceFileInfo"></div>
+                </div>
+
+                <!-- Template XML -->
+                <div class="upload-card" id="templateDropZone">
+                    <div class="upload-icon xml-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="16 18 22 12 16 6"></polyline>
+                            <polyline points="8 6 2 12 8 18"></polyline>
+                        </svg>
+                    </div>
+                    <h3>Template XML</h3>
+                    <p>Structure de données NETEXIAL</p>
+                    <input type="file" id="templateFile" accept=".xml" hidden>
+                    <button class="upload-btn" onclick="document.getElementById('templateFile').click()">Parcourir</button>
+                    <p class="drag-hint">ou glisser-déposer ici</p>
+                    <div class="file-info" id="templateFileInfo"></div>
+                </div>
+            </div>
+
+            <!-- Analyze Button -->
+            <div class="action-section">
+                <button class="analyze-btn" id="analyzeBtn" disabled>
+                    <span class="btn-content">
+                        <span class="btn-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <line x1="12" y1="2" x2="12" y2="6"></line>
+                                <line x1="12" y1="18" x2="12" y2="22"></line>
+                                <line x1="2" y1="12" x2="6" y2="12"></line>
+                                <line x1="18" y1="12" x2="22" y2="12"></line>
+                            </svg>
+                        </span>
+                        <span class="btn-text">Lancer l'Analyse ARGOS</span>
+                    </span>
+                    <span class="btn-loader" hidden>
+                        <span class="spinner"></span>
+                        <span>Traitement en cours...</span>
+                    </span>
+                </button>
+            </div>
+
+            <!-- Result Section -->
+            <div class="result-section" id="resultSection" hidden>
+                <div class="status-card" id="statusCard"></div>
+                <div class="download-section" id="downloadSection" hidden>
+                    <button class="download-btn" id="downloadBtn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Télécharger le XML</span>
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer-content">
+                <div class="footer-line"></div>
+                <p>Propulsé par <strong>ARGOS</strong> – <span class="netexial">NETEXIAL</span></p>
+                <div class="footer-line"></div>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // ============================================
+        // CONFIGURATION
+        // ============================================
+        const CONFIG = {
+            API_URL: '/api/extract',
+            MAX_FILE_SIZE: 50 * 1024 * 1024
+        };
+
+        // ============================================
+        // STATE
+        // ============================================
+        const state = {
+            sourceFile: null,
+            templateFile: null,
+            isProcessing: false,
+            resultBlob: null
+        };
+
+        // ============================================
+        // DOM ELEMENTS
+        // ============================================
+        const $ = id => document.getElementById(id);
+        const els = {
+            sourceDropZone: $('sourceDropZone'),
+            templateDropZone: $('templateDropZone'),
+            sourceFile: $('sourceFile'),
+            templateFile: $('templateFile'),
+            sourceFileInfo: $('sourceFileInfo'),
+            templateFileInfo: $('templateFileInfo'),
+            analyzeBtn: $('analyzeBtn'),
+            downloadBtn: $('downloadBtn'),
+            resultSection: $('resultSection'),
+            statusCard: $('statusCard'),
+            downloadSection: $('downloadSection'),
+            particles: $('particles')
+        };
+
+        // ============================================
+        // INIT
+        // ============================================
+        document.addEventListener('DOMContentLoaded', () => {
+            initParticles();
+            initDragDrop();
+            initFileInputs();
+            initButtons();
+        });
+
+        function initParticles() {
+            for (let i = 0; i < 50; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                p.style.left = Math.random() * 100 + '%';
+                p.style.animationDelay = Math.random() * 15 + 's';
+                p.style.animationDuration = (10 + Math.random() * 15) + 's';
+                els.particles.appendChild(p);
+            }
+        }
+
+        // ============================================
+        // DRAG & DROP
+        // ============================================
+        function initDragDrop() {
+            setupDrop(els.sourceDropZone, file => {
+                if (validateFile(file, 'source')) handleFile('source', file);
+            });
+            setupDrop(els.templateDropZone, file => {
+                if (validateFile(file, 'template')) handleFile('template', file);
+            });
+        }
+
+        function setupDrop(zone, onDrop) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+                zone.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); });
+            });
+            ['dragenter', 'dragover'].forEach(e => zone.addEventListener(e, () => zone.classList.add('dragover')));
+            ['dragleave', 'drop'].forEach(e => zone.addEventListener(e, () => zone.classList.remove('dragover')));
+            zone.addEventListener('drop', e => { if (e.dataTransfer.files[0]) onDrop(e.dataTransfer.files[0]); });
+        }
+
+        // ============================================
+        // FILE HANDLING
+        // ============================================
+        function initFileInputs() {
+            els.sourceFile.addEventListener('change', e => {
+                const f = e.target.files[0];
+                if (f && validateFile(f, 'source')) handleFile('source', f);
+            });
+            els.templateFile.addEventListener('change', e => {
+                const f = e.target.files[0];
+                if (f && validateFile(f, 'template')) handleFile('template', f);
+            });
+        }
+
+        function validateFile(file, type) {
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            if (type === 'source') {
+                const allowed = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.doc', '.docx', '.txt', '.md'];
+                if (!allowed.includes(ext)) { showError('Type de fichier non supporté'); return false; }
+            } else {
+                if (ext !== '.xml') { showError('Le template doit être un fichier XML'); return false; }
+            }
+            if (file.size > CONFIG.MAX_FILE_SIZE) { showError('Fichier trop volumineux (max 50 Mo)'); return false; }
+            return true;
+        }
+
+        function handleFile(type, file) {
+            state[type + 'File'] = file;
+            const info = els[type + 'FileInfo'];
+            const zone = els[type + 'DropZone'];
+            
+            info.innerHTML = `
+                <div class="file-name">📄 ${file.name}</div>
+                <div class="file-size">${formatSize(file.size)}</div>
+                <button class="remove-file">✕ Retirer</button>
+            `;
+            info.classList.add('visible');
+            zone.classList.add('has-file');
+            
+            info.querySelector('.remove-file').onclick = () => {
+                state[type + 'File'] = null;
+                els[type + 'File'].value = '';
+                info.classList.remove('visible');
+                zone.classList.remove('has-file');
+                updateBtn();
+            };
+            updateBtn();
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' o';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' Mo';
+        }
+
+        function updateBtn() {
+            els.analyzeBtn.disabled = !(state.sourceFile && state.templateFile && !state.isProcessing);
+        }
+
+        // ============================================
+        // ANALYSIS
+        // ============================================
+        function initButtons() {
+            els.analyzeBtn.onclick = startAnalysis;
+            els.downloadBtn.onclick = downloadResult;
+        }
+
+        async function startAnalysis() {
+            if (!state.sourceFile || !state.templateFile || state.isProcessing) return;
+
+            state.isProcessing = true;
+            setLoading(true);
+            updateBtn();
+            hideResult();
+            showStatus('loading', 'Analyse en cours', 'ARGOS extrait les données de votre document...');
+
+            try {
+                const formData = new FormData();
+                formData.append('source', state.sourceFile);
+                formData.append('template', state.templateFile);
+
+                const response = await fetch(CONFIG.API_URL, { method: 'POST', body: formData });
+                
+                if (!response.ok) throw new Error('Erreur serveur: ' + response.status);
+
+                state.resultBlob = await response.blob();
+                showStatus('success', 'Analyse terminée !', 'Votre fichier XML est prêt à être téléchargé.');
+                els.downloadSection.hidden = false;
+
+            } catch (err) {
+                console.error(err);
+                showStatus('error', 'Échec de l\'analyse', err.message);
+            } finally {
+                state.isProcessing = false;
+                setLoading(false);
+                updateBtn();
+            }
+        }
+
+        function setLoading(loading) {
+            els.analyzeBtn.querySelector('.btn-content').hidden = loading;
+            els.analyzeBtn.querySelector('.btn-loader').hidden = !loading;
+        }
+
+        // ============================================
+        // STATUS & DOWNLOAD
+        // ============================================
+        function showStatus(type, title, msg) {
+            els.resultSection.hidden = false;
+            const icons = { success: '✓', error: '✕', loading: '<div class="spinner"></div>' };
+            els.statusCard.className = 'status-card ' + type;
+            els.statusCard.innerHTML = `
+                <div class="status-icon">${icons[type]}</div>
+                <div class="status-message"><h4>${title}</h4><p>${msg}</p></div>
+            `;
+        }
+
+        function showError(msg) {
+            showStatus('error', 'Erreur', msg);
+            els.resultSection.hidden = false;
+        }
+
+        function hideResult() {
+            els.resultSection.hidden = true;
+            els.downloadSection.hidden = true;
+        }
+
+        function downloadResult() {
+            if (!state.resultBlob) return;
+            const url = URL.createObjectURL(state.resultBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'argos_resultat_' + Date.now() + '.xml';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+    </script>
+</body>
+</html>
