@@ -25,7 +25,7 @@ import google.generativeai as genai
 # ============================================================
 # CONFIGURATION
 # ============================================================
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyDOKby_ZUSfPWNyfHjSrOvN1JKjWCla4pI")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL_NAME = "gemini-2.0-flash"
 
 # Init Gemini
