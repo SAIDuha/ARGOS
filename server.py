@@ -108,14 +108,24 @@ CHAMPS À EXTRAIRE:{fields_desc}
 
 INSTRUCTIONS:
 1. Pour chaque champ, donne:
-   - valeur_defaut: la valeur trouvée/déduite
+   - valeur_defaut: la valeur trouvée ou déduite
    - type_source: "texte_explicite" | "analyse_visuelle" | "inference" | "non_trouve"
-   - reference: où tu as trouvé l'info (ex: "haut de l'image", "ligne 3")
-   - explication: pourquoi cette valeur
+   - reference: où tu as trouvé l'information (ex: "haut de l'image", "ligne 3")
+   - explication: pourquoi cette valeur a été choisie
 
 2. Si valeurs_possibles existe, choisis UNIQUEMENT parmi ces valeurs
-3. Si MULTIPLE, retourne une liste
-4. Si non trouvé mais OBLIGATOIRE, fais une inference
+
+3. Si MULTIPLE est défini, retourne une liste de valeurs
+
+4. Si l'information n'est pas clairement visible ou explicitement présente dans le document:
+   - tu peux tenter une inference UNIQUEMENT si elle est raisonnable, cohérente et justifiable
+   - si aucune inference fiable n'est possible, indique "non_trouve"
+   - ne fournis jamais une valeur arbitraire ou inventée uniquement pour répondre
+
+5. Si le champ est OBLIGATOIRE et que l'information n'est pas trouvée:
+   - fais une inference prudente
+   - explique clairement ton raisonnement et son niveau d'incertitude
+
 
 RÉPONDS UNIQUEMENT EN JSON:
 {{
