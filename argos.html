@@ -936,9 +936,96 @@
         }
 
         [hidden] { display: none !important; }
+
+
+        /* === ROBOT BACKGROUND === */
+.robot-bg {
+    position: fixed;
+    right: -5%;
+    bottom: -10%;
+    width: 55%;
+    max-width: 700px;
+    height: auto;
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(1px);
+    animation: robotFloat 6s ease-in-out infinite;
+}
+
+@keyframes robotFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-20px); }
+}
+
+/* Version plus visible au survol (optionnel) */
+.robot-bg:hover {
+    opacity: 0.25;
+    filter: blur(0);
+}
+
+/* Ajustement responsive */
+@media (max-width: 1200px) {
+    .robot-bg {
+        opacity: 0.1;
+        width: 50%;
+        right: -10%;
+    }
+}
+
+@media (max-width: 768px) {
+    .robot-bg {
+        display: none; /* Cache sur mobile */
+    }
+}
+    
+
+/* === ROBOT BACKGROUND === */
+.robot-bg {
+    position: fixed;
+    right: -50px;
+    bottom: -50px;
+    width: 45%;
+    max-width: 600px;
+    height: auto;
+    opacity: 0.85;
+    pointer-events: none;
+    z-index: 0;
+    animation: robotFloat 6s ease-in-out infinite;
+}
+
+@keyframes robotFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-15px); }
+}
+
+/* Ajustement responsive */
+@media (max-width: 1400px) {
+    .robot-bg {
+        opacity: 0.7;
+        width: 40%;
+        right: -80px;
+    }
+}
+
+@media (max-width: 1024px) {
+    .robot-bg {
+        opacity: 0.5;
+        width: 35%;
+        right: -100px;
+    }
+}
+
+@media (max-width: 768px) {
+    .robot-bg {
+        display: none;
+    }
+}
     </style>
+
 </head>
 <body>
+    <img src="robot.png" alt="" class="robot-bg">
     <div class="particles" id="particles"></div>
     <div class="grid-overlay"></div>
 
