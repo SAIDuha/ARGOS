@@ -1,24 +1,14 @@
-#!/usr/bin/env python3
-"""
-ARGOS Server - Serveur Flask pour lier le frontend HTML au backend NETEXIAL
-===========================================================================
-
-Usage:
-    python server.py
-    
-L'interface sera disponible sur http://localhost:5000
-"""
-
 import os
 import json
 import base64
 import mimetypes
 import tempfile
+import zipfile
 from pathlib import Path
 from datetime import datetime
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
-from flask import Flask, request, send_file, send_from_directory
+from flask import Flask, request, send_file, send_from_directory, jsonify
 from flask_cors import CORS
 import google.generativeai as genai
 
@@ -148,7 +138,7 @@ def extract_with_gemini(fields, source_info):
     else:
         content = [f"{prompt}\n\nCONTENU DU DOCUMENT:\n```\n{source_info['content']}\n```"]
     
-    print("🤖 Analyse en cours avec Gemini...")
+    print(f"🤖 Analyse en cours avec Gemini pour {source_info['filename']}...")
     response = model.generate_content(content)
     
     # Nettoyer le JSON
@@ -163,8 +153,10 @@ def extract_with_gemini(fields, source_info):
     return json.loads(text.strip())
 
 
-def fill_xml(root, extractions):
+def fill_xml(template_content, extractions, source_filename):
     """Remplit le XML avec les données extraites."""
+    root = ET.fromstring(template_content)
+    
     # Mapping des extractions
     ext_map = {e["nom"]: e for e in extractions.get("extractions", [])}
     
@@ -194,6 +186,7 @@ def fill_xml(root, extractions):
     meta = ET.SubElement(root, "metadata")
     ET.SubElement(meta, "date_extraction").text = datetime.now().isoformat()
     ET.SubElement(meta, "agent").text = "ARGOS / NETEXIAL Agent"
+    ET.SubElement(meta, "fichier_source").text = source_filename
     ET.SubElement(meta, "analyse_globale").text = extractions.get("analyse_globale", "")
     
     # Formatter
@@ -216,7 +209,7 @@ def index():
 
 @app.route('/api/extract', methods=['POST'])
 def extract():
-    """Endpoint d'extraction."""
+    """Endpoint d'extraction simple (1 fichier)."""
     try:
         # Récupérer les fichiers
         if 'source' not in request.files or 'template' not in request.files:
@@ -243,7 +236,7 @@ def extract():
         print(f"   → {len(extractions.get('extractions', []))} champs extraits")
         
         # Remplir le XML
-        result_xml = fill_xml(root, extractions)
+        result_xml = fill_xml(template_content, extractions, source_file.filename)
         
         # Sauvegarder temporairement et renvoyer
         output_path = Path(tempfile.gettempdir()) / f"argos_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
@@ -264,6 +257,116 @@ def extract():
         return {"error": str(e)}, 500
 
 
+@app.route('/api/extract-batch', methods=['POST'])
+def extract_batch():
+    """Endpoint d'extraction batch (plusieurs fichiers)."""
+    try:
+        # Récupérer le template
+        if 'template' not in request.files:
+            return {"error": "Template XML requis"}, 400
+        
+        template_file = request.files['template']
+        template_content = template_file.read().decode('utf-8')
+        fields, _ = load_xml_template(template_content)
+        
+        print(f"📋 Template: {template_file.filename}")
+        print(f"   → {len(fields)} champs à extraire")
+        
+        # Récupérer tous les fichiers source
+        source_files = request.files.getlist('sources')
+        if not source_files:
+            return {"error": "Au moins un fichier source requis"}, 400
+        
+        print(f"📁 {len(source_files)} fichiers à traiter")
+        
+        # Créer un dossier temporaire pour les résultats
+        temp_dir = Path(tempfile.gettempdir()) / f"argos_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        temp_dir.mkdir(exist_ok=True)
+        
+        results = []
+        errors = []
+        
+        for i, source_file in enumerate(source_files, 1):
+            try:
+                print(f"\n[{i}/{len(source_files)}] Traitement de {source_file.filename}...")
+                
+                # Charger la source
+                source_content = source_file.read()
+                source_info = load_source_file(source_content, source_file.filename)
+                
+                # Extraction avec Gemini
+                extractions = extract_with_gemini(fields, source_info)
+                
+                # Remplir le XML
+                result_xml = fill_xml(template_content, extractions, source_file.filename)
+                
+                # Nom du fichier de sortie
+                base_name = Path(source_file.filename).stem
+                output_name = f"{base_name}_extracted.xml"
+                output_path = temp_dir / output_name
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(result_xml)
+                
+                results.append({
+                    "source": source_file.filename,
+                    "output": output_name,
+                    "status": "success",
+                    "fields_extracted": len(extractions.get('extractions', []))
+                })
+                print(f"   ✅ {output_name}")
+                
+            except Exception as e:
+                error_msg = str(e)
+                errors.append({
+                    "source": source_file.filename,
+                    "error": error_msg
+                })
+                results.append({
+                    "source": source_file.filename,
+                    "status": "error",
+                    "error": error_msg
+                })
+                print(f"   ❌ Erreur: {error_msg}")
+        
+        # Créer le fichier ZIP
+        zip_path = Path(tempfile.gettempdir()) / f"argos_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            # Ajouter tous les XML générés
+            for xml_file in temp_dir.glob("*.xml"):
+                zipf.write(xml_file, xml_file.name)
+            
+            # Ajouter un rapport JSON
+            report = {
+                "date": datetime.now().isoformat(),
+                "template": template_file.filename,
+                "total_files": len(source_files),
+                "success": len([r for r in results if r["status"] == "success"]),
+                "errors": len(errors),
+                "results": results
+            }
+            zipf.writestr("_rapport.json", json.dumps(report, indent=2, ensure_ascii=False))
+        
+        # Nettoyer le dossier temporaire
+        for f in temp_dir.glob("*"):
+            f.unlink()
+        temp_dir.rmdir()
+        
+        print(f"\n✅ Batch terminé: {len(results) - len(errors)}/{len(results)} succès")
+        
+        return send_file(
+            zip_path,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=f"argos_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        )
+        
+    except Exception as e:
+        print(f"❌ Erreur batch: {e}")
+        return {"error": str(e)}, 500
+
+
 # ============================================================
 # MAIN
 # ============================================================
@@ -272,6 +375,8 @@ if __name__ == '__main__':
     print("🚀 ARGOS Server")
     print("=" * 50)
     print("   URL: http://localhost:5000")
+    print("   Mode simple: POST /api/extract")
+    print("   Mode batch:  POST /api/extract-batch")
     print("=" * 50)
     
     app.run(host='0.0.0.0', port=5000, debug=True)

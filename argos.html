@@ -24,8 +24,14 @@
             --white: #ffffff;
             --gray-light: #b4c7d9;
             --gray-medium: #6b8299;
+            --green-bright: #10b981;
+            --green-dark: #059669;
+            --purple-bright: #8b5cf6;
+            --purple-glow: #a78bfa;
             --glow-orange: 0 0 20px rgba(255, 149, 0, 0.5);
             --glow-blue: 0 0 20px rgba(0, 168, 255, 0.5);
+            --glow-green: 0 0 20px rgba(16, 185, 129, 0.5);
+            --glow-purple: 0 0 20px rgba(139, 92, 246, 0.5);
             --glow-intense: 0 0 40px rgba(0, 212, 255, 0.3);
             --transition-fast: 0.2s ease;
             --transition-medium: 0.3s ease;
@@ -88,37 +94,22 @@
             100% { transform: translateY(-100vh) rotate(720deg); opacity: 0; }
         }
 
-        /* === SCANNING LINES === */
-
-
-        .scan-line:nth-child(2) {
-            animation-delay: 2s;
-        }
-
-        @keyframes scanDown {
-            0% { top: -2px; opacity: 0; }
-            10% { opacity: 0.5; }
-            90% { opacity: 0.5; }
-            100% { top: 100%; opacity: 0; }
-        }
-
         /* === LAYOUT === */
         .container {
             position: relative;
             z-index: 1;
-            max-width: 900px;
+            max-width: 1000px;
             margin: 0 auto;
             padding: 40px 20px;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
-            justify-content: center;
         }
 
         /* === HEADER === */
         .header { 
             text-align: center; 
-            margin-bottom: 50px;
+            margin-bottom: 40px;
             animation: fadeInDown 0.8s ease-out;
         }
 
@@ -207,6 +198,60 @@
             50% { transform: rotate(45deg) scale(1.2); box-shadow: 0 0 30px rgba(255, 149, 0, 0.8); }
         }
 
+        /* === MODE TOGGLE === */
+        .mode-toggle {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 40px;
+            animation: fadeInUp 0.8s ease-out 0.1s both;
+        }
+
+        .mode-toggle-container {
+            display: flex;
+            background: rgba(13, 33, 55, 0.8);
+            border: 1px solid rgba(0, 168, 255, 0.3);
+            border-radius: 50px;
+            padding: 5px;
+            gap: 5px;
+        }
+
+        .mode-btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 45px;
+            font-family: 'Rajdhani', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: transparent;
+            color: var(--gray-medium);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .mode-btn svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .mode-btn.active {
+            background: linear-gradient(135deg, var(--blue-bright), var(--blue-light));
+            color: var(--white);
+            box-shadow: var(--glow-blue);
+        }
+
+        .mode-btn:not(.active):hover {
+            color: var(--blue-bright);
+            background: rgba(0, 168, 255, 0.1);
+        }
+
+        .mode-btn.batch.active {
+            background: linear-gradient(135deg, var(--purple-bright), #7c3aed);
+            box-shadow: var(--glow-purple);
+        }
+
         /* === UPLOAD SECTION === */
         .upload-section {
             display: flex;
@@ -241,6 +286,10 @@
         .section-title .icon { 
             color: var(--orange-bright); 
             animation: iconBlink 2s ease-in-out infinite;
+        }
+
+        .section-title.batch-title .icon {
+            color: var(--purple-bright);
         }
 
         @keyframes iconBlink {
@@ -316,6 +365,20 @@
         }
         .upload-card.has-file::before { opacity: 1; background: var(--orange-bright); }
 
+        /* Batch card styling */
+        .upload-card.batch-card {
+            width: 400px;
+        }
+
+        .upload-card.batch-card.has-file {
+            border-color: var(--purple-bright);
+            box-shadow: var(--glow-purple);
+        }
+
+        .upload-card.batch-card.has-file::before {
+            background: linear-gradient(90deg, var(--purple-bright), var(--purple-glow));
+        }
+
         .upload-icon {
             width: 90px; height: 90px;
             margin: 0 auto 25px;
@@ -368,6 +431,10 @@
         .xml-icon svg { color: var(--orange-bright); }
         .xml-icon { border-color: var(--orange-bright); }
         .xml-icon::before { border-color: rgba(255, 149, 0, 0.3); }
+
+        .batch-icon svg { color: var(--purple-bright); }
+        .batch-icon { border-color: var(--purple-bright); }
+        .batch-icon::before { border-color: rgba(139, 92, 246, 0.3); }
 
         .upload-card h3 {
             font-family: 'Orbitron', sans-serif;
@@ -457,6 +524,58 @@
 
         .file-info .remove-file:hover { background: var(--orange-fire); color: var(--white); }
 
+        /* Batch file info styling */
+        .file-info.batch-info {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: var(--purple-bright);
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .file-info.batch-info .file-name {
+            color: var(--purple-glow);
+        }
+
+        .file-info.batch-info .file-list {
+            text-align: left;
+            margin-top: 10px;
+        }
+
+        .file-info.batch-info .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            margin: 5px 0;
+            background: rgba(139, 92, 246, 0.1);
+            border-radius: 8px;
+            font-size: 0.9rem;
+        }
+
+        .file-info.batch-info .file-item .name {
+            color: var(--gray-light);
+            flex: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-info.batch-info .file-item .size {
+            color: var(--gray-medium);
+            font-size: 0.8rem;
+            margin-left: 10px;
+        }
+
+        .file-info.batch-info .remove-file {
+            border-color: var(--purple-bright);
+            color: var(--purple-bright);
+        }
+
+        .file-info.batch-info .remove-file:hover {
+            background: var(--purple-bright);
+            color: var(--white);
+        }
+
         /* === ANALYZE BUTTON === */
         .action-section { 
             text-align: center; 
@@ -482,6 +601,11 @@
             box-shadow: 0 10px 40px rgba(255, 149, 0, 0.3);
         }
 
+        .analyze-btn.batch-btn {
+            background: linear-gradient(135deg, var(--purple-bright), #7c3aed);
+            box-shadow: 0 10px 40px rgba(139, 92, 246, 0.3);
+        }
+
         .analyze-btn::before {
             content: '';
             position: absolute;
@@ -495,15 +619,28 @@
             animation: btnPulse 2s ease-in-out infinite;
         }
 
+        .analyze-btn.batch-btn:not(:disabled) {
+            animation: btnPulsePurple 2s ease-in-out infinite;
+        }
+
         @keyframes btnPulse {
             0%, 100% { box-shadow: 0 10px 40px rgba(255, 149, 0, 0.3); }
             50% { box-shadow: 0 15px 60px rgba(255, 149, 0, 0.5); }
+        }
+
+        @keyframes btnPulsePurple {
+            0%, 100% { box-shadow: 0 10px 40px rgba(139, 92, 246, 0.3); }
+            50% { box-shadow: 0 15px 60px rgba(139, 92, 246, 0.5); }
         }
 
         .analyze-btn:hover:not(:disabled)::before { left: 100%; }
         .analyze-btn:hover:not(:disabled) {
             transform: translateY(-5px) scale(1.05);
             box-shadow: 0 20px 60px rgba(255, 149, 0, 0.5);
+        }
+
+        .analyze-btn.batch-btn:hover:not(:disabled) {
+            box-shadow: 0 20px 60px rgba(139, 92, 246, 0.5);
         }
 
         .analyze-btn:disabled {
@@ -538,9 +675,85 @@
 
         @keyframes spin { to { transform: rotate(360deg); } }
 
+        /* === PROGRESS SECTION (BATCH) === */
+        .progress-section {
+            max-width: 600px;
+            margin: 0 auto 30px;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .progress-card {
+            background: linear-gradient(145deg, rgba(13, 33, 55, 0.9), rgba(10, 22, 40, 0.95));
+            border: 1px solid var(--purple-bright);
+            border-radius: 15px;
+            padding: 25px 30px;
+            box-shadow: var(--glow-purple);
+        }
+
+        .progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .progress-header h4 {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.1rem;
+            color: var(--purple-glow);
+        }
+
+        .progress-count {
+            font-size: 0.9rem;
+            color: var(--gray-light);
+        }
+
+        .progress-bar-container {
+            background: rgba(139, 92, 246, 0.2);
+            border-radius: 10px;
+            height: 12px;
+            overflow: hidden;
+            margin-bottom: 15px;
+        }
+
+        .progress-bar {
+            height: 100%;
+            background: linear-gradient(90deg, var(--purple-bright), var(--purple-glow));
+            border-radius: 10px;
+            transition: width 0.3s ease;
+            position: relative;
+        }
+
+        .progress-bar::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: progressShine 1.5s infinite;
+        }
+
+        @keyframes progressShine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+
+        .progress-current {
+            font-size: 0.9rem;
+            color: var(--gray-light);
+            text-align: center;
+        }
+
+        .progress-current .filename {
+            color: var(--purple-glow);
+            font-weight: 600;
+        }
+
         /* === RESULT === */
         .result-section { 
-            max-width: 500px; 
+            max-width: 600px; 
             margin: 0 auto;
             animation: fadeInUp 0.5s ease-out;
         }
@@ -575,6 +788,11 @@
             animation: statusAppear 0.5s ease-out, loadingPulse 1.5s ease-in-out infinite;
         }
 
+        .status-card.loading.batch {
+            border-color: var(--purple-bright);
+            box-shadow: var(--glow-purple);
+        }
+
         @keyframes loadingPulse {
             0%, 100% { box-shadow: 0 0 20px rgba(255, 149, 0, 0.3); }
             50% { box-shadow: 0 0 40px rgba(255, 149, 0, 0.5); }
@@ -604,10 +822,44 @@
 
         .status-card.error .status-icon { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
         .status-card.loading .status-icon { background: rgba(255, 149, 0, 0.2); color: var(--orange-bright); }
+        .status-card.loading.batch .status-icon { background: rgba(139, 92, 246, 0.2); color: var(--purple-bright); }
 
         .status-message { flex: 1; }
         .status-message h4 { font-family: 'Orbitron', sans-serif; font-size: 1.1rem; margin-bottom: 5px; }
         .status-message p { color: var(--gray-light); font-size: 0.9rem; }
+
+        /* Batch result details */
+        .batch-results {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+
+        .batch-stats {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .batch-stat {
+            text-align: center;
+        }
+
+        .batch-stat .number {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .batch-stat .label {
+            font-size: 0.8rem;
+            color: var(--gray-medium);
+            text-transform: uppercase;
+        }
+
+        .batch-stat.success .number { color: var(--green-bright); }
+        .batch-stat.error .number { color: #ef4444; }
+        .batch-stat.total .number { color: var(--purple-glow); }
 
         .download-section { 
             text-align: center; 
@@ -670,7 +922,9 @@
             .title { font-size: 3rem; letter-spacing: 10px; }
             .upload-section { gap: 20px; }
             .upload-card { width: 100%; max-width: 350px; }
+            .upload-card.batch-card { width: 100%; max-width: 350px; }
             .analyze-btn { padding: 18px 40px; font-size: 1rem; }
+            .mode-btn { padding: 10px 20px; font-size: 0.9rem; }
         }
 
         @media (max-width: 480px) {
@@ -678,14 +932,13 @@
             .title { font-size: 2.5rem; letter-spacing: 5px; }
             .upload-card { padding: 30px 20px; }
             .analyze-btn { padding: 15px 30px; font-size: 0.9rem; }
+            .mode-toggle-container { flex-direction: column; }
         }
 
         [hidden] { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="scan-line"></div>
-    <div class="scan-line"></div>
     <div class="particles" id="particles"></div>
     <div class="grid-overlay"></div>
 
@@ -703,70 +956,179 @@
             </div>
         </header>
 
+        <!-- Mode Toggle -->
+        <div class="mode-toggle">
+            <div class="mode-toggle-container">
+                <button class="mode-btn active" id="singleModeBtn" onclick="switchMode('single')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                    </svg>
+                    Fichier Unique
+                </button>
+                <button class="mode-btn batch" id="batchModeBtn" onclick="switchMode('batch')">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="2" width="6" height="6" rx="1"></rect>
+                        <rect x="9" y="2" width="6" height="6" rx="1"></rect>
+                        <rect x="16" y="2" width="6" height="6" rx="1"></rect>
+                        <rect x="2" y="9" width="6" height="6" rx="1"></rect>
+                        <rect x="9" y="9" width="6" height="6" rx="1"></rect>
+                        <rect x="16" y="9" width="6" height="6" rx="1"></rect>
+                    </svg>
+                    Mode Batch
+                </button>
+            </div>
+        </div>
+
         <!-- Upload Section -->
         <main>
-            <div class="upload-section">
-                <h2 class="section-title">
-                    <span class="icon">◈</span> Téléverser les Fichiers <span class="icon">◈</span>
-                </h2>
+            <!-- SINGLE MODE -->
+            <div id="singleMode">
+                <div class="upload-section">
+                    <h2 class="section-title">
+                        <span class="icon">◈</span> Téléverser les Fichiers <span class="icon">◈</span>
+                    </h2>
 
-                <!-- Source File -->
-                <div class="upload-card" id="sourceDropZone">
-                    <div class="upload-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-                            <polyline points="14 2 14 8 20 8"></polyline>
-                            <line x1="12" y1="18" x2="12" y2="12"></line>
-                            <line x1="9" y1="15" x2="12" y2="12"></line>
-                            <line x1="15" y1="15" x2="12" y2="12"></line>
-                        </svg>
+                    <!-- Source File -->
+                    <div class="upload-card" id="sourceDropZone">
+                        <div class="upload-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                                <polyline points="14 2 14 8 20 8"></polyline>
+                                <line x1="12" y1="18" x2="12" y2="12"></line>
+                                <line x1="9" y1="15" x2="12" y2="12"></line>
+                                <line x1="15" y1="15" x2="12" y2="12"></line>
+                            </svg>
+                        </div>
+                        <h3>Document Source</h3>
+                        <p>PDF, Image, Word, Fichier texte</p>
+                        <input type="file" id="sourceFile" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" hidden>
+                        <button class="upload-btn" onclick="document.getElementById('sourceFile').click()">Parcourir</button>
+                        <p class="drag-hint">ou glisser-déposer ici</p>
+                        <div class="file-info" id="sourceFileInfo"></div>
                     </div>
-                    <h3>Document Source</h3>
-                    <p>PDF, Image, Word, Fichier texte</p>
-                    <input type="file" id="sourceFile" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" hidden>
-                    <button class="upload-btn" onclick="document.getElementById('sourceFile').click()">Parcourir</button>
-                    <p class="drag-hint">ou glisser-déposer ici</p>
-                    <div class="file-info" id="sourceFileInfo"></div>
+
+                    <!-- Template XML -->
+                    <div class="upload-card" id="templateDropZone">
+                        <div class="upload-icon xml-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                            </svg>
+                        </div>
+                        <h3>Template XML</h3>
+                        <p>Structure de données NETEXIAL</p>
+                        <input type="file" id="templateFile" accept=".xml" hidden>
+                        <button class="upload-btn" onclick="document.getElementById('templateFile').click()">Parcourir</button>
+                        <p class="drag-hint">ou glisser-déposer ici</p>
+                        <div class="file-info" id="templateFileInfo"></div>
+                    </div>
                 </div>
 
-                <!-- Template XML -->
-                <div class="upload-card" id="templateDropZone">
-                    <div class="upload-icon xml-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="16 18 22 12 16 6"></polyline>
-                            <polyline points="8 6 2 12 8 18"></polyline>
-                        </svg>
-                    </div>
-                    <h3>Template XML</h3>
-                    <p>Structure de données NETEXIAL</p>
-                    <input type="file" id="templateFile" accept=".xml" hidden>
-                    <button class="upload-btn" onclick="document.getElementById('templateFile').click()">Parcourir</button>
-                    <p class="drag-hint">ou glisser-déposer ici</p>
-                    <div class="file-info" id="templateFileInfo"></div>
+                <!-- Analyze Button -->
+                <div class="action-section">
+                    <button class="analyze-btn" id="analyzeBtn" disabled>
+                        <span class="btn-content">
+                            <span class="btn-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                                </svg>
+                            </span>
+                            <span class="btn-text">Lancer l'Analyse ARGOS</span>
+                        </span>
+                        <span class="btn-loader" hidden>
+                            <span class="spinner"></span>
+                            <span>Traitement en cours...</span>
+                        </span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Analyze Button -->
-            <div class="action-section">
-                <button class="analyze-btn" id="analyzeBtn" disabled>
-                    <span class="btn-content">
-                        <span class="btn-icon">
+            <!-- BATCH MODE -->
+            <div id="batchMode" hidden>
+                <div class="upload-section">
+                    <h2 class="section-title batch-title">
+                        <span class="icon">◈</span> Traitement par Lot <span class="icon">◈</span>
+                    </h2>
+
+                    <!-- Multiple Source Files -->
+                    <div class="upload-card batch-card" id="batchSourceDropZone">
+                        <div class="upload-icon batch-icon">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <circle cx="12" cy="12" r="10"></circle>
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <line x1="12" y1="2" x2="12" y2="6"></line>
-                                <line x1="12" y1="18" x2="12" y2="22"></line>
-                                <line x1="2" y1="12" x2="6" y2="12"></line>
-                                <line x1="18" y1="12" x2="22" y2="12"></line>
+                                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+                                <line x1="12" y1="11" x2="12" y2="17"></line>
+                                <line x1="9" y1="14" x2="12" y2="11"></line>
+                                <line x1="15" y1="14" x2="12" y2="11"></line>
                             </svg>
+                        </div>
+                        <h3>Documents Sources</h3>
+                        <p>Sélectionnez plusieurs fichiers (PDF, Images, Textes)</p>
+                        <input type="file" id="batchSourceFiles" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" multiple hidden>
+                        <button class="upload-btn" onclick="document.getElementById('batchSourceFiles').click()">Parcourir</button>
+                        <p class="drag-hint">ou glisser-déposer plusieurs fichiers</p>
+                        <div class="file-info batch-info" id="batchSourceFileInfo"></div>
+                    </div>
+
+                    <!-- Template XML -->
+                    <div class="upload-card" id="batchTemplateDropZone">
+                        <div class="upload-icon xml-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="16 18 22 12 16 6"></polyline>
+                                <polyline points="8 6 2 12 8 18"></polyline>
+                            </svg>
+                        </div>
+                        <h3>Template XML</h3>
+                        <p>Un seul template pour tous les fichiers</p>
+                        <input type="file" id="batchTemplateFile" accept=".xml" hidden>
+                        <button class="upload-btn" onclick="document.getElementById('batchTemplateFile').click()">Parcourir</button>
+                        <p class="drag-hint">ou glisser-déposer ici</p>
+                        <div class="file-info" id="batchTemplateFileInfo"></div>
+                    </div>
+                </div>
+
+                <!-- Batch Analyze Button -->
+                <div class="action-section">
+                    <button class="analyze-btn batch-btn" id="batchAnalyzeBtn" disabled>
+                        <span class="btn-content">
+                            <span class="btn-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <circle cx="12" cy="12" r="3"></circle>
+                                    <line x1="12" y1="2" x2="12" y2="6"></line>
+                                    <line x1="12" y1="18" x2="12" y2="22"></line>
+                                    <line x1="2" y1="12" x2="6" y2="12"></line>
+                                    <line x1="18" y1="12" x2="22" y2="12"></line>
+                                </svg>
+                            </span>
+                            <span class="btn-text">Lancer l'Analyse Batch</span>
                         </span>
-                        <span class="btn-text">Lancer l'Analyse ARGOS</span>
-                    </span>
-                    <span class="btn-loader" hidden>
-                        <span class="spinner"></span>
-                        <span>Traitement en cours...</span>
-                    </span>
-                </button>
+                        <span class="btn-loader" hidden>
+                            <span class="spinner"></span>
+                            <span>Traitement en cours...</span>
+                        </span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress Section (Batch) -->
+            <div class="progress-section" id="progressSection" hidden>
+                <div class="progress-card">
+                    <div class="progress-header">
+                        <h4>Progression</h4>
+                        <span class="progress-count" id="progressCount">0/0</span>
+                    </div>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="progressBar" style="width: 0%"></div>
+                    </div>
+                    <p class="progress-current">
+                        Fichier en cours : <span class="filename" id="currentFileName">-</span>
+                    </p>
+                </div>
             </div>
 
             <!-- Result Section -->
@@ -779,7 +1141,7 @@
                             <polyline points="7 10 12 15 17 10"></polyline>
                             <line x1="12" y1="15" x2="12" y2="3"></line>
                         </svg>
-                        <span>Télécharger le XML</span>
+                        <span id="downloadBtnText">Télécharger le XML</span>
                     </button>
                 </div>
             </div>
@@ -801,6 +1163,7 @@
         // ============================================
         const CONFIG = {
             API_URL: '/api/extract',
+            API_BATCH_URL: '/api/extract-batch',
             MAX_FILE_SIZE: 50 * 1024 * 1024
         };
 
@@ -808,8 +1171,14 @@
         // STATE
         // ============================================
         const state = {
+            mode: 'single', // 'single' or 'batch'
+            // Single mode
             sourceFile: null,
             templateFile: null,
+            // Batch mode
+            batchSourceFiles: [],
+            batchTemplateFile: null,
+            // Common
             isProcessing: false,
             resultBlob: null
         };
@@ -819,6 +1188,12 @@
         // ============================================
         const $ = id => document.getElementById(id);
         const els = {
+            // Mode toggle
+            singleModeBtn: $('singleModeBtn'),
+            batchModeBtn: $('batchModeBtn'),
+            singleMode: $('singleMode'),
+            batchMode: $('batchMode'),
+            // Single mode
             sourceDropZone: $('sourceDropZone'),
             templateDropZone: $('templateDropZone'),
             sourceFile: $('sourceFile'),
@@ -826,7 +1201,22 @@
             sourceFileInfo: $('sourceFileInfo'),
             templateFileInfo: $('templateFileInfo'),
             analyzeBtn: $('analyzeBtn'),
+            // Batch mode
+            batchSourceDropZone: $('batchSourceDropZone'),
+            batchTemplateDropZone: $('batchTemplateDropZone'),
+            batchSourceFiles: $('batchSourceFiles'),
+            batchTemplateFile: $('batchTemplateFile'),
+            batchSourceFileInfo: $('batchSourceFileInfo'),
+            batchTemplateFileInfo: $('batchTemplateFileInfo'),
+            batchAnalyzeBtn: $('batchAnalyzeBtn'),
+            // Progress
+            progressSection: $('progressSection'),
+            progressBar: $('progressBar'),
+            progressCount: $('progressCount'),
+            currentFileName: $('currentFileName'),
+            // Common
             downloadBtn: $('downloadBtn'),
+            downloadBtnText: $('downloadBtnText'),
             resultSection: $('resultSection'),
             statusCard: $('statusCard'),
             downloadSection: $('downloadSection'),
@@ -855,14 +1245,46 @@
         }
 
         // ============================================
+        // MODE SWITCHING
+        // ============================================
+        function switchMode(mode) {
+            state.mode = mode;
+            
+            if (mode === 'single') {
+                els.singleModeBtn.classList.add('active');
+                els.batchModeBtn.classList.remove('active');
+                els.singleMode.hidden = false;
+                els.batchMode.hidden = true;
+            } else {
+                els.singleModeBtn.classList.remove('active');
+                els.batchModeBtn.classList.add('active');
+                els.singleMode.hidden = true;
+                els.batchMode.hidden = false;
+            }
+            
+            hideResult();
+            els.progressSection.hidden = true;
+        }
+
+        // ============================================
         // DRAG & DROP
         // ============================================
         function initDragDrop() {
+            // Single mode
             setupDrop(els.sourceDropZone, file => {
                 if (validateFile(file, 'source')) handleFile('source', file);
             });
             setupDrop(els.templateDropZone, file => {
                 if (validateFile(file, 'template')) handleFile('template', file);
+            });
+            
+            // Batch mode
+            setupDropMultiple(els.batchSourceDropZone, files => {
+                const validFiles = files.filter(f => validateFile(f, 'source'));
+                if (validFiles.length > 0) handleBatchFiles(validFiles);
+            });
+            setupDrop(els.batchTemplateDropZone, file => {
+                if (validateFile(file, 'template')) handleBatchTemplate(file);
             });
         }
 
@@ -875,10 +1297,23 @@
             zone.addEventListener('drop', e => { if (e.dataTransfer.files[0]) onDrop(e.dataTransfer.files[0]); });
         }
 
+        function setupDropMultiple(zone, onDrop) {
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(e => {
+                zone.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); });
+            });
+            ['dragenter', 'dragover'].forEach(e => zone.addEventListener(e, () => zone.classList.add('dragover')));
+            ['dragleave', 'drop'].forEach(e => zone.addEventListener(e, () => zone.classList.remove('dragover')));
+            zone.addEventListener('drop', e => { 
+                const files = Array.from(e.dataTransfer.files);
+                if (files.length > 0) onDrop(files);
+            });
+        }
+
         // ============================================
         // FILE HANDLING
         // ============================================
         function initFileInputs() {
+            // Single mode
             els.sourceFile.addEventListener('change', e => {
                 const f = e.target.files[0];
                 if (f && validateFile(f, 'source')) handleFile('source', f);
@@ -887,20 +1322,31 @@
                 const f = e.target.files[0];
                 if (f && validateFile(f, 'template')) handleFile('template', f);
             });
+            
+            // Batch mode
+            els.batchSourceFiles.addEventListener('change', e => {
+                const files = Array.from(e.target.files).filter(f => validateFile(f, 'source'));
+                if (files.length > 0) handleBatchFiles(files);
+            });
+            els.batchTemplateFile.addEventListener('change', e => {
+                const f = e.target.files[0];
+                if (f && validateFile(f, 'template')) handleBatchTemplate(f);
+            });
         }
 
         function validateFile(file, type) {
             const ext = '.' + file.name.split('.').pop().toLowerCase();
             if (type === 'source') {
                 const allowed = ['.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.doc', '.docx', '.txt', '.md'];
-                if (!allowed.includes(ext)) { showError('Type de fichier non supporté'); return false; }
+                if (!allowed.includes(ext)) { showError('Type de fichier non supporté: ' + file.name); return false; }
             } else {
                 if (ext !== '.xml') { showError('Le template doit être un fichier XML'); return false; }
             }
-            if (file.size > CONFIG.MAX_FILE_SIZE) { showError('Fichier trop volumineux (max 50 Mo)'); return false; }
+            if (file.size > CONFIG.MAX_FILE_SIZE) { showError('Fichier trop volumineux (max 50 Mo): ' + file.name); return false; }
             return true;
         }
 
+        // Single mode file handling
         function handleFile(type, file) {
             state[type + 'File'] = file;
             const info = els[type + 'FileInfo'];
@@ -924,6 +1370,82 @@
             updateBtn();
         }
 
+        // Batch mode file handling
+        function handleBatchFiles(files) {
+            // Add to existing files
+            state.batchSourceFiles = [...state.batchSourceFiles, ...files];
+            updateBatchSourceInfo();
+            updateBtn();
+        }
+
+        function handleBatchTemplate(file) {
+            state.batchTemplateFile = file;
+            const info = els.batchTemplateFileInfo;
+            const zone = els.batchTemplateDropZone;
+            
+            info.innerHTML = `
+                <div class="file-name">📄 ${file.name}</div>
+                <div class="file-size">${formatSize(file.size)}</div>
+                <button class="remove-file">✕ Retirer</button>
+            `;
+            info.classList.add('visible');
+            zone.classList.add('has-file');
+            
+            info.querySelector('.remove-file').onclick = () => {
+                state.batchTemplateFile = null;
+                els.batchTemplateFile.value = '';
+                info.classList.remove('visible');
+                zone.classList.remove('has-file');
+                updateBtn();
+            };
+            updateBtn();
+        }
+
+        function updateBatchSourceInfo() {
+            const info = els.batchSourceFileInfo;
+            const zone = els.batchSourceDropZone;
+            
+            if (state.batchSourceFiles.length === 0) {
+                info.classList.remove('visible');
+                zone.classList.remove('has-file');
+                return;
+            }
+            
+            const totalSize = state.batchSourceFiles.reduce((sum, f) => sum + f.size, 0);
+            
+            let html = `
+                <div class="file-name">📁 ${state.batchSourceFiles.length} fichier(s) sélectionné(s)</div>
+                <div class="file-size">Taille totale: ${formatSize(totalSize)}</div>
+                <div class="file-list">
+            `;
+            
+            state.batchSourceFiles.forEach((f, i) => {
+                html += `
+                    <div class="file-item">
+                        <span class="name">${f.name}</span>
+                        <span class="size">${formatSize(f.size)}</span>
+                    </div>
+                `;
+            });
+            
+            html += `
+                </div>
+                <button class="remove-file">✕ Retirer tous</button>
+            `;
+            
+            info.innerHTML = html;
+            info.classList.add('visible');
+            zone.classList.add('has-file');
+            
+            info.querySelector('.remove-file').onclick = () => {
+                state.batchSourceFiles = [];
+                els.batchSourceFiles.value = '';
+                info.classList.remove('visible');
+                zone.classList.remove('has-file');
+                updateBtn();
+            };
+        }
+
         function formatSize(bytes) {
             if (bytes < 1024) return bytes + ' o';
             if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' Ko';
@@ -931,7 +1453,11 @@
         }
 
         function updateBtn() {
-            els.analyzeBtn.disabled = !(state.sourceFile && state.templateFile && !state.isProcessing);
+            if (state.mode === 'single') {
+                els.analyzeBtn.disabled = !(state.sourceFile && state.templateFile && !state.isProcessing);
+            } else {
+                els.batchAnalyzeBtn.disabled = !(state.batchSourceFiles.length > 0 && state.batchTemplateFile && !state.isProcessing);
+            }
         }
 
         // ============================================
@@ -939,14 +1465,16 @@
         // ============================================
         function initButtons() {
             els.analyzeBtn.onclick = startAnalysis;
+            els.batchAnalyzeBtn.onclick = startBatchAnalysis;
             els.downloadBtn.onclick = downloadResult;
         }
 
+        // Single mode analysis
         async function startAnalysis() {
             if (!state.sourceFile || !state.templateFile || state.isProcessing) return;
 
             state.isProcessing = true;
-            setLoading(true);
+            setLoading(els.analyzeBtn, true);
             updateBtn();
             hideResult();
             showStatus('loading', 'Analyse en cours', 'ARGOS extrait les données de votre document...');
@@ -962,6 +1490,7 @@
 
                 state.resultBlob = await response.blob();
                 showStatus('success', 'Analyse terminée !', 'Votre fichier XML est prêt à être téléchargé.');
+                els.downloadBtnText.textContent = 'Télécharger le XML';
                 els.downloadSection.hidden = false;
 
             } catch (err) {
@@ -969,26 +1498,110 @@
                 showStatus('error', 'Échec de l\'analyse', err.message);
             } finally {
                 state.isProcessing = false;
-                setLoading(false);
+                setLoading(els.analyzeBtn, false);
                 updateBtn();
             }
         }
 
-        function setLoading(loading) {
-            els.analyzeBtn.querySelector('.btn-content').hidden = loading;
-            els.analyzeBtn.querySelector('.btn-loader').hidden = !loading;
+        // Batch mode analysis
+        async function startBatchAnalysis() {
+            if (state.batchSourceFiles.length === 0 || !state.batchTemplateFile || state.isProcessing) return;
+
+            state.isProcessing = true;
+            setLoading(els.batchAnalyzeBtn, true);
+            updateBtn();
+            hideResult();
+            
+            // Show progress
+            els.progressSection.hidden = false;
+            updateProgress(0, state.batchSourceFiles.length, 'Préparation...');
+            
+            showStatus('loading', 'Analyse batch en cours', `Traitement de ${state.batchSourceFiles.length} fichier(s)...`, true);
+
+            try {
+                const formData = new FormData();
+                formData.append('template', state.batchTemplateFile);
+                
+                state.batchSourceFiles.forEach(f => {
+                    formData.append('sources', f);
+                });
+
+                // Simulate progress (we don't have real-time progress from server)
+                let progress = 0;
+                const progressInterval = setInterval(() => {
+                    if (progress < state.batchSourceFiles.length - 1) {
+                        progress++;
+                        updateProgress(progress, state.batchSourceFiles.length, state.batchSourceFiles[progress]?.name || '...');
+                    }
+                }, 2000);
+
+                const response = await fetch(CONFIG.API_BATCH_URL, { method: 'POST', body: formData });
+                
+                clearInterval(progressInterval);
+                
+                if (!response.ok) throw new Error('Erreur serveur: ' + response.status);
+
+                state.resultBlob = await response.blob();
+                
+                updateProgress(state.batchSourceFiles.length, state.batchSourceFiles.length, 'Terminé !');
+                
+                showBatchSuccess(state.batchSourceFiles.length);
+                els.downloadBtnText.textContent = 'Télécharger le ZIP';
+                els.downloadSection.hidden = false;
+
+            } catch (err) {
+                console.error(err);
+                showStatus('error', 'Échec de l\'analyse batch', err.message);
+            } finally {
+                state.isProcessing = false;
+                setLoading(els.batchAnalyzeBtn, false);
+                updateBtn();
+            }
+        }
+
+        function updateProgress(current, total, filename) {
+            const percent = (current / total) * 100;
+            els.progressBar.style.width = percent + '%';
+            els.progressCount.textContent = `${current}/${total}`;
+            els.currentFileName.textContent = filename;
+        }
+
+        function setLoading(btn, loading) {
+            btn.querySelector('.btn-content').hidden = loading;
+            btn.querySelector('.btn-loader').hidden = !loading;
         }
 
         // ============================================
         // STATUS & DOWNLOAD
         // ============================================
-        function showStatus(type, title, msg) {
+        function showStatus(type, title, msg, isBatch = false) {
             els.resultSection.hidden = false;
             const icons = { success: '✓', error: '✕', loading: '<div class="spinner"></div>' };
-            els.statusCard.className = 'status-card ' + type;
+            const batchClass = isBatch && type === 'loading' ? ' batch' : '';
+            els.statusCard.className = 'status-card ' + type + batchClass;
             els.statusCard.innerHTML = `
                 <div class="status-icon">${icons[type]}</div>
                 <div class="status-message"><h4>${title}</h4><p>${msg}</p></div>
+            `;
+        }
+
+        function showBatchSuccess(total) {
+            els.resultSection.hidden = false;
+            els.statusCard.className = 'status-card success';
+            els.statusCard.innerHTML = `
+                <div class="status-icon">✓</div>
+                <div class="status-message">
+                    <h4>Analyse batch terminée !</h4>
+                    <p>Tous les fichiers ont été traités avec succès.</p>
+                    <div class="batch-results">
+                        <div class="batch-stats">
+                            <div class="batch-stat total">
+                                <div class="number">${total}</div>
+                                <div class="label">Fichiers traités</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             `;
         }
 
@@ -1007,7 +1620,13 @@
             const url = URL.createObjectURL(state.resultBlob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'argos_resultat_' + Date.now() + '.xml';
+            
+            if (state.mode === 'single') {
+                a.download = 'argos_resultat_' + Date.now() + '.xml';
+            } else {
+                a.download = 'argos_batch_' + Date.now() + '.zip';
+            }
+            
             a.click();
             URL.revokeObjectURL(url);
         }
