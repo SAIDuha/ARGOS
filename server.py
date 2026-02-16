@@ -29,8 +29,24 @@ genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(MODEL_NAME)
 
 app = Flask(__name__, static_folder='.', static_url_path='')
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "argos-secret-key")
-CORS(app, supports_credentials=True)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "argos-secret-key-change-in-prod")
+
+# ============================================================
+# CONFIGURATION COOKIES POUR HTTPS/RENDER
+# ============================================================
+# Ces paramètres sont ESSENTIELS pour que les sessions fonctionnent
+# correctement sur Render.com avec HTTPS
+app.config.update(
+    SESSION_COOKIE_SECURE=True,      # Cookie uniquement sur HTTPS
+    SESSION_COOKIE_HTTPONLY=True,    # Pas accessible via JavaScript
+    SESSION_COOKIE_SAMESITE='None',  # Permet les redirections cross-origin (OAuth)
+)
+
+CORS(app, supports_credentials=True, origins=[
+    "https://argos-vuzs.onrender.com",
+    "http://localhost:5000",
+    "http://127.0.0.1:5000"
+])
 
 user_credentials = {}
 
@@ -155,7 +171,15 @@ def fill_xml(template_content, extractions, source_filename):
 # ============================================================
 
 def get_gmail_flow():
-    redirect_uri = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:5000/oauth/callback")
+    # Détecter automatiquement l'URL de base
+    base_url = os.environ.get("RENDER_EXTERNAL_URL", os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:5000"))
+    if base_url.endswith('/oauth/callback'):
+        redirect_uri = base_url
+    else:
+        redirect_uri = base_url.rstrip('/') + '/oauth/callback'
+    
+    print(f"[OAuth] Using redirect_uri: {redirect_uri}")
+    
     return Flow.from_client_config(
         {"web": {"client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET,
                  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
@@ -267,26 +291,62 @@ def gmail_auth():
         flow = get_gmail_flow()
         url, state = flow.authorization_url(access_type='offline', prompt='consent')
         session['oauth_state'] = state
+        session.modified = True  # Force la sauvegarde de la session
+        print(f"[OAuth] Auth initiated, state: {state[:20]}...")
         return jsonify({"auth_url": url})
-    except Exception as e: return {"error": str(e)}, 500
+    except Exception as e: 
+        print(f"[OAuth] Auth error: {e}")
+        return {"error": str(e)}, 500
 
 @app.route('/oauth/callback')
 def oauth_callback():
     try:
+        print(f"[OAuth] Callback received")
+        print(f"[OAuth] Request URL: {request.url}")
+        print(f"[OAuth] Session keys: {list(session.keys())}")
+        
+        # Vérifier si on a le code d'autorisation
+        code = request.args.get('code')
+        if not code:
+            error = request.args.get('error', 'No code received')
+            print(f"[OAuth] Error: {error}")
+            return redirect('/?gmail_auth=error&reason=' + error)
+        
         flow = get_gmail_flow()
+        
+        # Fetch token avec l'URL complète
         flow.fetch_token(authorization_response=request.url)
         creds = flow.credentials
+        
+        # Créer une session utilisateur
         sid = os.urandom(16).hex()
         session['gmail_session'] = sid
-        user_credentials[sid] = {'token': creds.token, 'refresh_token': creds.refresh_token,
-            'token_uri': creds.token_uri, 'client_id': creds.client_id, 'client_secret': creds.client_secret, 'scopes': creds.scopes}
+        session.modified = True
+        
+        user_credentials[sid] = {
+            'token': creds.token, 
+            'refresh_token': creds.refresh_token,
+            'token_uri': creds.token_uri, 
+            'client_id': creds.client_id, 
+            'client_secret': creds.client_secret, 
+            'scopes': list(creds.scopes) if creds.scopes else GMAIL_SCOPES
+        }
+        
+        print(f"[OAuth] Success! Session ID: {sid[:10]}...")
         return redirect('/?gmail_auth=success')
-    except: return redirect('/?gmail_auth=error')
+        
+    except Exception as e:
+        print(f"[OAuth] Callback error: {e}")
+        import traceback
+        traceback.print_exc()
+        return redirect('/?gmail_auth=error')
 
 @app.route('/api/gmail/status')
 def gmail_status():
     sid = session.get('gmail_session')
-    return jsonify({"connected": sid and sid in user_credentials})
+    connected = sid is not None and sid in user_credentials
+    print(f"[Gmail Status] Session ID: {sid[:10] if sid else 'None'}... Connected: {connected}")
+    return jsonify({"connected": connected})
 
 @app.route('/api/gmail/disconnect')
 def gmail_disconnect():
@@ -334,6 +394,17 @@ def extract_emails():
         temp_dir.rmdir()
         return send_file(zip_path, mimetype='application/zip', as_attachment=True)
     except Exception as e: return {"error": str(e)}, 500
+
+# ============================================================
+# DEBUG ROUTE (à supprimer en production)
+# ============================================================
+@app.route('/debug/session')
+def debug_session():
+    return jsonify({
+        "session_keys": list(session.keys()),
+        "gmail_session": session.get('gmail_session', 'Not set')[:10] + '...' if session.get('gmail_session') else None,
+        "credentials_count": len(user_credentials)
+    })
 
 if __name__ == '__main__':
     print("🚀 ARGOS Server - http://localhost:5000")
