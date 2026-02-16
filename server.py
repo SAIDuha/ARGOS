@@ -41,12 +41,10 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "argos-secret-key-change-in-
 # ============================================================
 # CONFIGURATION COOKIES POUR HTTPS/RENDER
 # ============================================================
-# Ces paramètres sont ESSENTIELS pour que les sessions fonctionnent
-# correctement sur Render.com avec HTTPS
 app.config.update(
-    SESSION_COOKIE_SECURE=True,      # Cookie uniquement sur HTTPS
-    SESSION_COOKIE_HTTPONLY=True,    # Pas accessible via JavaScript
-    SESSION_COOKIE_SAMESITE='None',  # Permet les redirections cross-origin (OAuth)
+    SESSION_COOKIE_SECURE=True,
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='None',
 )
 
 CORS(app, supports_credentials=True, origins=[
@@ -54,8 +52,6 @@ CORS(app, supports_credentials=True, origins=[
     "http://localhost:5000",
     "http://127.0.0.1:5000"
 ])
-
-user_credentials = {}
 
 # ============================================================
 # HELPER FUNCTIONS
@@ -65,7 +61,7 @@ def load_xml_template(xml_content):
     root = ET.fromstring(xml_content)
     fields = []
     champs = root.find("champs")
-    if champs:
+    if champs is not None:  # Fix DeprecationWarning
         for champ in champs.findall("champ"):
             field = {
                 "nom": champ.findtext("nom", "").strip(),
@@ -76,7 +72,7 @@ def load_xml_template(xml_content):
                 "valeurs_possibles": []
             }
             valeurs = champ.find("valeurs_possibles")
-            if valeurs:
+            if valeurs is not None:  # Fix DeprecationWarning
                 field["valeurs_possibles"] = [v.text.strip() for v in valeurs.findall("valeur") if v.text]
             fields.append(field)
     return fields, root
@@ -151,7 +147,7 @@ def fill_xml(template_content, extractions, source_filename):
     root = ET.fromstring(template_content)
     ext_map = {e["nom"]: e for e in extractions.get("extractions", [])}
     champs = root.find("champs")
-    if champs:
+    if champs is not None:  # Fix DeprecationWarning
         for champ in champs.findall("champ"):
             nom = champ.findtext("nom", "").strip()
             if nom in ext_map:
@@ -178,20 +174,40 @@ def fill_xml(template_content, extractions, source_filename):
 # ============================================================
 
 def get_gmail_flow():
-    # Détecter automatiquement l'URL de base
-    base_url = os.environ.get("RENDER_EXTERNAL_URL", os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:5000"))
-    if base_url.endswith('/oauth/callback'):
-        redirect_uri = base_url
-    else:
-        redirect_uri = base_url.rstrip('/') + '/oauth/callback'
-    
-    print(f"[OAuth] Using redirect_uri: {redirect_uri}")
-    
+    redirect_uri = os.environ.get("OAUTH_REDIRECT_URI", "http://localhost:5000/oauth/callback")
     return Flow.from_client_config(
         {"web": {"client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET,
                  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
                  "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [redirect_uri]}},
         scopes=GMAIL_SCOPES, redirect_uri=redirect_uri)
+
+def get_credentials_from_session():
+    """Récupère les credentials depuis la session Flask"""
+    creds_data = session.get('gmail_credentials')
+    if not creds_data:
+        return None
+    
+    creds = Credentials(
+        token=creds_data['token'],
+        refresh_token=creds_data['refresh_token'],
+        token_uri=creds_data['token_uri'],
+        client_id=creds_data['client_id'],
+        client_secret=creds_data['client_secret'],
+        scopes=creds_data['scopes']
+    )
+    
+    # Refresh si expiré
+    if creds.expired and creds.refresh_token:
+        try:
+            creds.refresh(Request())
+            # Mettre à jour la session avec le nouveau token
+            session['gmail_credentials']['token'] = creds.token
+            session.modified = True
+        except Exception as e:
+            print(f"[Gmail] Token refresh failed: {e}")
+            return None
+    
+    return creds
 
 def get_label_id(service, label_name):
     for label in service.users().labels().list(userId='me').execute().get('labels', []):
@@ -298,8 +314,8 @@ def gmail_auth():
         flow = get_gmail_flow()
         url, state = flow.authorization_url(access_type='offline', prompt='consent')
         session['oauth_state'] = state
-        session.modified = True  # Force la sauvegarde de la session
-        print(f"[OAuth] Auth initiated, state: {state[:20]}...")
+        session.modified = True
+        print(f"[OAuth] Auth initiated")
         return jsonify({"auth_url": url})
     except Exception as e: 
         print(f"[OAuth] Auth error: {e}")
@@ -309,37 +325,29 @@ def gmail_auth():
 def oauth_callback():
     try:
         print(f"[OAuth] Callback received")
-        print(f"[OAuth] Request URL: {request.url}")
-        print(f"[OAuth] Session keys: {list(session.keys())}")
         
-        # Vérifier si on a le code d'autorisation
         code = request.args.get('code')
         if not code:
             error = request.args.get('error', 'No code received')
             print(f"[OAuth] Error: {error}")
-            return redirect('/?gmail_auth=error&reason=' + error)
+            return redirect('/?gmail_auth=error')
         
         flow = get_gmail_flow()
-        
-        # Fetch token avec l'URL complète
         flow.fetch_token(authorization_response=request.url)
         creds = flow.credentials
         
-        # Créer une session utilisateur
-        sid = os.urandom(16).hex()
-        session['gmail_session'] = sid
-        session.modified = True
-        
-        user_credentials[sid] = {
-            'token': creds.token, 
+        # Stocker les credentials DIRECTEMENT dans la session
+        session['gmail_credentials'] = {
+            'token': creds.token,
             'refresh_token': creds.refresh_token,
-            'token_uri': creds.token_uri, 
-            'client_id': creds.client_id, 
-            'client_secret': creds.client_secret, 
+            'token_uri': creds.token_uri,
+            'client_id': creds.client_id,
+            'client_secret': creds.client_secret,
             'scopes': list(creds.scopes) if creds.scopes else GMAIL_SCOPES
         }
+        session.modified = True
         
-        print(f"[OAuth] Success! Session ID: {sid[:10]}...")
+        print(f"[OAuth] Success! Credentials stored in session")
         return redirect('/?gmail_auth=success')
         
     except Exception as e:
@@ -350,67 +358,87 @@ def oauth_callback():
 
 @app.route('/api/gmail/status')
 def gmail_status():
-    sid = session.get('gmail_session')
-    connected = sid is not None and sid in user_credentials
-    print(f"[Gmail Status] Session ID: {sid[:10] if sid else 'None'}... Connected: {connected}")
+    connected = 'gmail_credentials' in session and session['gmail_credentials'] is not None
+    print(f"[Gmail Status] Connected: {connected}")
     return jsonify({"connected": connected})
 
 @app.route('/api/gmail/disconnect')
 def gmail_disconnect():
-    sid = session.get('gmail_session')
-    if sid and sid in user_credentials: del user_credentials[sid]
-    session.pop('gmail_session', None)
+    session.pop('gmail_credentials', None)
+    session.modified = True
     return jsonify({"success": True})
 
 @app.route('/api/extract-emails', methods=['POST'])
 def extract_emails():
     try:
-        sid = session.get('gmail_session')
-        if not sid or sid not in user_credentials: return {"error": "Non connecté"}, 401
-        cd = user_credentials[sid]
-        creds = Credentials(token=cd['token'], refresh_token=cd['refresh_token'], token_uri=cd['token_uri'],
-                           client_id=cd['client_id'], client_secret=cd['client_secret'], scopes=cd['scopes'])
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-            user_credentials[sid]['token'] = creds.token
+        print("[Extract Emails] Starting...")
+        
+        # Récupérer les credentials depuis la session
+        creds = get_credentials_from_session()
+        if not creds:
+            print("[Extract Emails] No credentials found")
+            return {"error": "Non connecté à Gmail"}, 401
+        
+        print("[Extract Emails] Credentials OK")
+        
         template_file = request.files.get('template')
-        if not template_file: return {"error": "Template requis"}, 400
+        if not template_file: 
+            return {"error": "Template requis"}, 400
+        
         template_content = template_file.read().decode('utf-8')
         fields, _ = load_xml_template(template_content)
         label = request.form.get('label', 'ARGOS')
+        
+        print(f"[Extract Emails] Looking for label: {label}")
+        
         service = build('gmail', 'v1', credentials=creds)
         emails = get_emails_from_label(service, label)
-        if not emails: return {"error": f"Aucun email dans '{label}'"}, 404
+        
+        if not emails: 
+            print(f"[Extract Emails] No emails found in label '{label}'")
+            return {"error": f"Aucun email dans le label '{label}'"}, 404
+        
+        print(f"[Extract Emails] Found {len(emails)} emails")
+        
         temp_dir = Path(tempfile.gettempdir()) / f"emails_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         temp_dir.mkdir(exist_ok=True)
         results = []
+        
         for email in emails:
             try:
+                print(f"[Extract Emails] Processing: {email['subject'][:30]}...")
                 extractions = extract_email_with_gemini(fields, email)
                 safe_subj = "".join(c for c in email['subject'][:20] if c.isalnum() or c in ' -_').strip().replace(' ', '_') or 'email'
                 out_name = f"{safe_subj}_{email['id'][:6]}.xml"
                 result_xml = fill_xml(template_content, extractions, f"Email: {email['subject']}")
                 (temp_dir / out_name).write_text(result_xml, encoding='utf-8')
                 results.append({"id": email['id'], "subject": email['subject'], "status": "success"})
-            except Exception as e: results.append({"id": email['id'], "subject": email['subject'], "status": "error", "error": str(e)})
+            except Exception as e:
+                print(f"[Extract Emails] Error processing email: {e}")
+                results.append({"id": email['id'], "subject": email['subject'], "status": "error", "error": str(e)})
+        
         zip_path = Path(tempfile.gettempdir()) / f"emails_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
         with zipfile.ZipFile(zip_path, 'w') as zf:
             for f in temp_dir.glob("*.xml"): zf.write(f, f.name)
             zf.writestr("_rapport.json", json.dumps({"label": label, "total": len(emails), "results": results}, indent=2))
+        
         for f in temp_dir.glob("*"): f.unlink()
         temp_dir.rmdir()
+        
+        print(f"[Extract Emails] Done! Returning ZIP")
         return send_file(zip_path, mimetype='application/zip', as_attachment=True)
-    except Exception as e: return {"error": str(e)}, 500
+        
+    except Exception as e:
+        print(f"[Extract Emails] Error: {e}")
+        import traceback
+        traceback.print_exc()
+        return {"error": str(e)}, 500
 
-# ============================================================
-# DEBUG ROUTE (à supprimer en production)
-# ============================================================
 @app.route('/debug/session')
 def debug_session():
     return jsonify({
-        "session_keys": list(session.keys()),
-        "gmail_session": session.get('gmail_session', 'Not set')[:10] + '...' if session.get('gmail_session') else None,
-        "credentials_count": len(user_credentials)
+        "has_credentials": 'gmail_credentials' in session,
+        "session_keys": list(session.keys())
     })
 
 if __name__ == '__main__':
