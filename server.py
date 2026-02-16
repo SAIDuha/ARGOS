@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from flask import Flask, request, send_file, send_from_directory, jsonify, session, redirect
 from flask_cors import CORS
+from werkzeug.middleware.proxy_fix import ProxyFix
 import google.generativeai as genai
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import Flow
@@ -29,6 +30,12 @@ genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(MODEL_NAME)
 
 app = Flask(__name__, static_folder='.', static_url_path='')
+
+# ============================================================
+# FIX POUR RENDER.COM - Permet à Flask de reconnaître HTTPS
+# ============================================================
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "argos-secret-key-change-in-prod")
 
 # ============================================================
