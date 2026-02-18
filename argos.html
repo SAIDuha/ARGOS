@@ -7,334 +7,865 @@
     <link rel="icon" type="image/png" href="icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Monoton&display=swap" rel="stylesheet">
     <style>
-        :root{--blue-primary:#141B4D;--blue-dark:#1C3775;--blue-medium:#98B2DD;--blue-light:#C1D1EB;--orange:#FC6100;--white:#FFFFFF;--green:#00685E;--bg:#EEF2F8;}
-        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
-        body{font-family:'Roboto',sans-serif;background:var(--blue-primary);color:var(--white);min-height:100vh;overflow-x:hidden;}
-        .robot-bg{position:fixed;right:-60px;bottom:0;height:95vh;width:auto;pointer-events:none;z-index:0;filter:drop-shadow(-40px 0 80px rgba(20,27,77,0.8));}
-        @media(max-width:900px){.robot-bg{display:none;}}
-        .pattern-overlay{position:fixed;inset:0;pointer-events:none;z-index:0;background-image:repeating-linear-gradient(-45deg,transparent 0px,transparent 18px,rgba(152,178,221,0.04) 18px,rgba(152,178,221,0.04) 20px);}
-        .orange-slash{position:fixed;top:0;right:0;width:6px;height:100vh;background:var(--orange);z-index:1;}
-        .header{position:relative;z-index:10;padding:28px 48px;display:flex;align-items:center;}
-        .logo-mark{display:flex;align-items:center;gap:12px;text-decoration:none;}
-        .logo-symbol svg{width:32px;height:32px;}
-        .logo-name{font-family:'Oswald',sans-serif;font-weight:700;font-size:1.3rem;letter-spacing:6px;color:var(--white);text-transform:uppercase;}
-        .header-sep{width:1px;height:28px;background:rgba(152,178,221,0.3);margin:0 24px;}
-        .header-dept{font-family:'Roboto',sans-serif;font-size:0.75rem;font-weight:300;color:var(--blue-medium);letter-spacing:3px;text-transform:uppercase;}
-        .header-pill{margin-left:auto;border:1px solid var(--orange);color:var(--orange);font-family:'Oswald',sans-serif;font-size:0.7rem;letter-spacing:3px;padding:5px 16px;text-transform:uppercase;}
-        .hero-body{position:relative;z-index:5;padding:0 48px 40px;max-width:660px;}
-        .hero-tag{display:inline-block;background:var(--orange);font-family:'Oswald',sans-serif;font-size:0.7rem;font-weight:600;letter-spacing:4px;padding:6px 18px;text-transform:uppercase;margin-bottom:32px;}
-        .hero-title-argos{font-family:'Monoton',cursive;font-size:clamp(3.5rem,8vw,6.5rem);color:var(--white);line-height:1;margin-bottom:8px;}
-        .hero-title-argos .argos-letter{display:inline-block;transition:color 0.2s;}
-        .hero-title-argos:hover .argos-letter:nth-child(odd){color:var(--orange);}
-        .hero-title-argos:hover .argos-letter:nth-child(even){color:var(--blue-medium);}
-        .hero-divider{display:flex;align-items:center;gap:16px;margin:24px 0;}
-        .hero-divider-line{width:48px;height:3px;background:var(--orange);}
-        .hero-divider-text{font-family:'Oswald',sans-serif;font-size:0.75rem;font-weight:400;letter-spacing:4px;color:var(--blue-medium);text-transform:uppercase;}
-        .hero-subtitle{font-family:'Roboto',sans-serif;font-size:1rem;font-weight:300;color:var(--blue-light);line-height:1.7;max-width:420px;margin-bottom:48px;}
-        .panel-container{position:relative;z-index:10;}
-        .mode-tabs{display:flex;margin-left:48px;}
-        .mode-tab{padding:14px 28px;font-family:'Oswald',sans-serif;font-size:0.85rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;background:rgba(20,27,77,0.5);color:var(--blue-medium);border:1px solid rgba(152,178,221,0.15);border-bottom:none;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:8px;position:relative;}
-        .mode-tab svg{width:14px;height:14px;}
-        .mode-tab:hover{color:var(--white);background:rgba(28,55,117,0.7);}
-        .mode-tab.active{background:var(--white);color:var(--blue-primary);border-color:var(--white);}
-        .mode-tab.active::after{content:'';position:absolute;bottom:-3px;left:0;right:0;height:3px;background:var(--white);}
-        .panel-white{background:var(--white);color:var(--blue-primary);padding:40px 48px;position:relative;}
-        .panel-white::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--orange) 0%,var(--orange) 40%,var(--blue-medium) 100%);}
-        .mode-panel{display:none;}
-        .mode-panel.active{display:block;}
-        .section-label{font-family:'Oswald',sans-serif;font-size:0.7rem;font-weight:600;letter-spacing:5px;color:var(--orange);text-transform:uppercase;margin-bottom:6px;}
-        .section-heading{font-family:'Oswald',sans-serif;font-size:1.4rem;font-weight:700;color:var(--blue-primary);text-transform:uppercase;letter-spacing:2px;margin-bottom:28px;}
-        .cards-row{display:flex;gap:20px;flex-wrap:wrap;}
-        .drop-card{flex:1;min-width:240px;border:2px solid var(--blue-light);padding:28px 24px;position:relative;transition:all 0.22s;background:var(--bg);}
-        .drop-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--blue-light);transition:background 0.22s;}
-        .drop-card:hover{border-color:var(--blue-primary);}
-        .drop-card:hover::before{background:var(--blue-primary);}
-        .drop-card.has-file{border-color:var(--orange);}
-        .drop-card.has-file::before{background:var(--orange);}
-        .drop-card.email-ok{border-color:var(--green);}
-        .drop-card.email-ok::before{background:var(--green);}
-        .card-icon-row{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
-        .card-picto{width:44px;height:44px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
-        .card-picto svg{width:20px;height:20px;color:var(--blue-primary);}
-        .card-picto.orange{background:rgba(252,97,0,0.12);}
-        .card-picto.orange svg{color:var(--orange);}
-        .card-picto.gmail{background:rgba(220,53,69,0.10);}
-        .card-picto.gmail svg{color:#DC3545;}
-        .card-name{font-family:'Oswald',sans-serif;font-size:1rem;font-weight:600;color:var(--blue-primary);text-transform:uppercase;letter-spacing:1px;}
-        .card-sub{font-size:0.78rem;color:#5A6A8A;margin-top:2px;}
-        .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;font-family:'Oswald',sans-serif;font-size:0.82rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;border:2px solid;cursor:pointer;transition:all 0.2s;}
-        .btn svg{width:14px;height:14px;}
-        .btn-navy{background:var(--blue-primary);color:var(--white);border-color:var(--blue-primary);}
-        .btn-navy:hover{background:transparent;color:var(--blue-primary);}
-        .btn-orange{background:var(--orange);color:var(--white);border-color:var(--orange);}
-        .btn-orange:hover{background:transparent;color:var(--orange);}
-        .btn-red{background:#DC3545;color:var(--white);border-color:#DC3545;}
-        .btn-red:hover{background:transparent;color:#DC3545;}
-        .drag-note{font-size:0.73rem;color:#8A9AB5;margin-top:8px;font-style:italic;}
-        .file-chip{display:none;margin-top:14px;padding:10px 14px;background:var(--white);border-left:3px solid var(--orange);border-top:1px solid var(--blue-light);border-right:1px solid var(--blue-light);border-bottom:1px solid var(--blue-light);}
-        .file-chip.visible{display:block;}
-        .chip-name{font-family:'Oswald',sans-serif;font-size:0.85rem;font-weight:500;color:var(--blue-primary);word-break:break-all;}
-        .chip-size{font-size:0.72rem;color:#8A9AB5;margin-top:2px;}
-        .chip-remove{margin-top:8px;background:transparent;border:1px solid var(--orange);color:var(--orange);padding:2px 10px;font-size:0.7rem;font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;transition:all 0.15s;}
-        .chip-remove:hover{background:var(--orange);color:var(--white);}
-        .gmail-connected-msg{display:none;margin-top:12px;padding:10px 14px;background:rgba(0,104,94,0.08);border-left:3px solid var(--green);font-size:0.82rem;color:var(--green);font-weight:500;flex-direction:row;align-items:center;gap:10px;}
-        .gmail-connected-msg.visible{display:flex;}
-        .btn-disconnect{margin-left:auto;background:transparent;border:1px solid var(--green);color:var(--green);padding:2px 10px;font-size:0.7rem;cursor:pointer;font-family:'Oswald',sans-serif;letter-spacing:1px;transition:all 0.15s;}
-        .btn-disconnect:hover{background:var(--green);color:var(--white);}
-        .label-field{margin-top:14px;display:none;}
-        .label-field label{display:block;font-family:'Oswald',sans-serif;font-size:0.7rem;letter-spacing:3px;color:var(--blue-primary);text-transform:uppercase;margin-bottom:6px;}
-        .label-field input{width:100%;padding:9px 12px;border:2px solid var(--blue-light);background:var(--white);color:var(--blue-primary);font-family:'Roboto',sans-serif;font-size:0.88rem;transition:border-color 0.2s;}
-        .label-field input:focus{outline:none;border-color:var(--blue-primary);}
-        .action-band{background:var(--blue-primary);padding:24px 48px;display:flex;align-items:center;gap:24px;border-top:3px solid var(--orange);}
-        .action-band-label{font-family:'Oswald',sans-serif;font-size:0.7rem;letter-spacing:4px;color:var(--blue-medium);text-transform:uppercase;}
-        .btn-launch{display:inline-flex;align-items:center;gap:14px;padding:16px 48px;background:var(--orange);color:var(--white);border:2px solid var(--orange);font-family:'Oswald',sans-serif;font-size:1rem;font-weight:600;letter-spacing:4px;text-transform:uppercase;cursor:pointer;transition:all 0.25s;position:relative;overflow:hidden;}
-        .btn-launch svg{width:18px;height:18px;flex-shrink:0;}
-        .btn-launch::after{content:'';position:absolute;inset:0;background:var(--white);transform:scaleX(0);transform-origin:right;transition:transform 0.25s;}
-        .btn-launch>*{position:relative;z-index:1;}
-        .btn-launch:not(:disabled):hover{color:var(--orange);border-color:var(--orange);}
-        .btn-launch:not(:disabled):hover::after{transform:scaleX(1);}
-        .btn-launch:disabled{background:rgba(152,178,221,0.2);border-color:rgba(152,178,221,0.3);color:rgba(152,178,221,0.5);cursor:not-allowed;}
-        .btn-launch.batch{background:var(--blue-dark);border-color:var(--blue-dark);}
-        .btn-launch.batch:not(:disabled):hover{color:var(--blue-dark);}
-        .btn-launch.email{background:#DC3545;border-color:#DC3545;}
-        .btn-launch.email:not(:disabled):hover{color:#DC3545;}
-        .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;}
-        @keyframes spin{to{transform:rotate(360deg);}}
-        .feedback-zone{background:rgba(255,255,255,0.04);border-top:1px solid rgba(152,178,221,0.15);padding:28px 48px;}
-        .progress-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-        .progress-lbl{font-family:'Oswald',sans-serif;font-size:0.75rem;letter-spacing:3px;color:var(--blue-medium);text-transform:uppercase;}
-        .progress-count{font-size:0.8rem;color:var(--blue-medium);}
-        .progress-track{background:rgba(152,178,221,0.15);height:4px;margin-bottom:8px;}
-        .progress-fill{height:100%;background:var(--orange);transition:width 0.3s;}
-        .progress-file{font-size:0.78rem;color:#8A9AB5;margin-bottom:16px;}
-        .progress-file strong{color:var(--blue-medium);}
-        .status-row{display:flex;align-items:flex-start;gap:16px;padding:16px 0;}
-        .status-ico{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;}
-        .status-row.success .status-ico{color:var(--green);}
-        .status-row.error .status-ico{color:#FC5454;}
-        .status-row.loading .status-ico{color:var(--orange);}
-        .status-title{font-family:'Oswald',sans-serif;font-size:0.9rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;}
-        .status-row.success .status-title{color:#5CDB9A;}
-        .status-row.error .status-title{color:#FC5454;}
-        .status-row.loading .status-title{color:var(--orange);}
-        .status-msg{font-size:0.82rem;color:#8A9AB5;}
-        .btn-download{display:inline-flex;align-items:center;gap:10px;margin-top:12px;padding:13px 36px;background:var(--green);color:var(--white);border:2px solid var(--green);font-family:'Oswald',sans-serif;font-size:0.85rem;font-weight:600;letter-spacing:3px;text-transform:uppercase;cursor:pointer;transition:all 0.2s;}
-        .btn-download:hover{background:transparent;color:var(--green);}
-        .btn-download svg{width:15px;height:15px;}
-        .footer{position:relative;z-index:10;padding:20px 48px;display:flex;align-items:center;gap:20px;border-top:1px solid rgba(152,178,221,0.1);}
-        .footer-line{flex:1;height:1px;background:rgba(152,178,221,0.1);}
-        .footer-txt{font-family:'Roboto',sans-serif;font-size:0.75rem;color:rgba(152,178,221,0.4);letter-spacing:2px;}
-        .footer-txt strong{font-family:'Oswald',sans-serif;color:rgba(252,97,0,0.7);letter-spacing:3px;}
-        @media(max-width:768px){
-            .header,.hero-body,.panel-white,.action-band,.feedback-zone,.footer{padding-left:20px;padding-right:20px;}
-            .mode-tabs{margin-left:20px;overflow-x:auto;}
-            .hero-title-argos{font-size:3rem;}
-            .cards-row{flex-direction:column;}
+        :root {
+            --navy:       #141B4D;
+            --navy-dark:  #0D1235;
+            --navy-mid:   #1C3775;
+            --blue-med:   #98B2DD;
+            --blue-light: #C1D1EB;
+            --blue-pale:  #E8EFF8;
+            --orange:     #FC6100;
+            --orange-dk:  #D45200;
+            --white:      #FFFFFF;
+            --green:      #00685E;
         }
-        [hidden]{display:none !important;}
+
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background: var(--blue-light);
+            color: var(--navy);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* ══════════════════════════════════════
+           ROBOT EN FOND (fixe, côté droit)
+        ══════════════════════════════════════ */
+        .robot-bg {
+            position: fixed;
+            right: -30px;
+            bottom: 0;
+            height: 92vh;
+            width: auto;
+            pointer-events: none;
+            z-index: 1;
+            /* Légère teinte bleue pour l'intégrer dans le fond bleu ciel */
+            filter: drop-shadow(-20px 0 60px rgba(20,27,77,0.25));
+        }
+        @media (max-width: 1000px) { .robot-bg { display: none; } }
+
+        .pattern-hero { display: none; }
+
+        /* Barre latérale orange — signature NETEXIAL */
+        .stripe-orange {
+            position: fixed;
+            right: 0; top: 0; bottom: 0;
+            width: 5px;
+            background: var(--orange);
+            z-index: 100;
+        }
+
+        /* Bloc décoratif coin haut gauche */
+        .deco-block {
+            position: fixed;
+            top: 0; left: 0;
+            width: 5px;
+            height: 100vh;
+            background: var(--navy);
+            z-index: 100;
+        }
+
+        /* ══════════════════════════════════════
+           HEADER BANDE NAVY
+        ══════════════════════════════════════ */
+        .site-header {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: var(--navy);
+            padding: 0 56px;
+            height: 68px;
+            display: flex;
+            align-items: center;
+            gap: 0;
+            box-shadow: 0 2px 24px rgba(20,27,77,0.35);
+        }
+
+        /* Accent orange sous le header */
+        .site-header::after {
+            content: '';
+            position: absolute;
+            bottom: 0; left: 0; right: 0;
+            height: 3px;
+            background: linear-gradient(90deg, var(--orange) 0%, var(--orange) 180px, transparent 180px);
+        }
+
+        .logo-wrap {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            text-decoration: none;
+        }
+        .logo-svg { width: 30px; height: 30px; }
+        .logo-text {
+            font-family: 'Oswald', sans-serif;
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: 7px;
+            color: var(--white);
+            text-transform: uppercase;
+        }
+        .header-divider {
+            width: 1px; height: 30px;
+            background: rgba(152,178,221,0.25);
+            margin: 0 24px;
+        }
+        .header-sub {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 300;
+            letter-spacing: 5px;
+            color: var(--blue-med);
+            text-transform: uppercase;
+        }
+        .header-tag {
+            margin-left: auto;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.65rem;
+            font-weight: 600;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--orange);
+            border: 1px solid var(--orange);
+            padding: 5px 14px;
+        }
+
+        /* ══════════════════════════════════════
+           SECTION HERO (fond bleu ciel)
+        ══════════════════════════════════════ */
+        .hero {
+            position: relative;
+            z-index: 2;
+            padding: 60px 56px 0;
+            max-width: 700px;
+        }
+
+        /* Étiquette catégorie */
+        .hero-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 36px;
+        }
+        .label-bar {
+            width: 28px; height: 3px;
+            background: var(--orange);
+        }
+        .label-text {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: var(--navy-mid);
+        }
+
+        /* Bloc tag orange */
+        .hero-tag-block {
+            background: var(--orange);
+            display: inline-block;
+            padding: 7px 20px;
+            margin-bottom: 28px;
+        }
+        .hero-tag-block span {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.7rem;
+            font-weight: 600;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: var(--white);
+        }
+
+        /* ─ ARGOS en MONOTON ─ */
+        .argos-title {
+            font-family: 'Monoton', cursive;
+            font-size: clamp(4rem, 9vw, 7.5rem);
+            line-height: 0.95;
+            color: var(--orange);
+            margin-bottom: 0;
+            display: block;
+        }
+
+        /* Ligne divider orange + texte */
+        .hero-divider-row {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            margin: 28px 0 22px;
+        }
+        .divider-line-short {
+            width: 44px; height: 3px;
+            background: var(--orange);
+            flex-shrink: 0;
+        }
+        .divider-tagline {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.1rem;
+            font-weight: 500;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            color: var(--navy);
+        }
+
+        .hero-desc {
+            font-family: 'Roboto', sans-serif;
+            font-size: 1rem;
+            font-weight: 300;
+            color: var(--navy-mid);
+            line-height: 1.75;
+            max-width: 400px;
+            margin-bottom: 52px;
+        }
+
+        /* ══════════════════════════════════════
+           BLOC INTERFACE — panneau principal
+        ══════════════════════════════════════ */
+        .interface-block {
+            position: relative;
+            z-index: 10;
+        }
+
+        /* ─ Onglets de mode ─ */
+        .tabs-row {
+            display: flex;
+            padding-left: 56px;
+            gap: 0;
+        }
+        .tab-btn {
+            padding: 15px 30px;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            background: var(--blue-med);
+            color: var(--navy);
+            border: none;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            position: relative;
+            opacity: 0.7;
+        }
+        .tab-btn svg { width: 14px; height: 14px; }
+        .tab-btn:hover { opacity: 1; background: var(--blue-med); }
+        .tab-btn.active {
+            background: var(--navy);
+            color: var(--white);
+            opacity: 1;
+        }
+        .tab-btn.active::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--orange);
+        }
+
+        /* ─ Panneau blanc principal ─ */
+        .main-panel {
+            background: var(--white);
+            position: relative;
+            box-shadow: 0 -4px 40px rgba(20,27,77,0.12);
+        }
+        /* Ligne de couleur top */
+        .main-panel::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 4px;
+            background: var(--navy);
+        }
+
+        .panel-body {
+            padding: 40px 56px 44px;
+        }
+
+        .panel-eyebrow {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.68rem;
+            font-weight: 600;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            color: var(--orange);
+            margin-bottom: 5px;
+        }
+        .panel-title {
+            font-family: 'Oswald', sans-serif;
+            font-size: 1.3rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: var(--navy);
+            margin-bottom: 32px;
+        }
+
+        .mode-panel { display: none; }
+        .mode-panel.active { display: block; }
+
+        /* ─ Grille de cartes ─ */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+        }
+
+        /* ─ Carte dépôt ─ */
+        .drop-card {
+            background: var(--blue-pale);
+            border: 2px solid var(--blue-light);
+            padding: 28px 24px 24px;
+            position: relative;
+            cursor: default;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .drop-card::after {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 4px;
+            background: var(--blue-light);
+            transition: background 0.2s;
+        }
+        .drop-card:hover { border-color: var(--navy-mid); box-shadow: 0 4px 20px rgba(20,27,77,0.1); }
+        .drop-card:hover::after { background: var(--navy-mid); }
+        .drop-card.has-file { border-color: var(--orange); }
+        .drop-card.has-file::after { background: var(--orange); }
+        .drop-card.connected { border-color: var(--green); }
+        .drop-card.connected::after { background: var(--green); }
+
+        /* Picto card */
+        .card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+        .card-picto {
+            width: 42px; height: 42px;
+            background: var(--blue-light);
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .card-picto svg { width: 18px; height: 18px; color: var(--navy); }
+        .card-picto.p-orange { background: rgba(252,97,0,0.12); }
+        .card-picto.p-orange svg { color: var(--orange); }
+        .card-picto.p-red { background: rgba(220,53,69,0.10); }
+        .card-picto.p-red svg { color: #C0392B; }
+
+        .card-label {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--navy);
+        }
+        .card-desc { font-size: 0.77rem; color: #6B7DA0; margin-top: 2px; }
+
+        /* Boutons */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 11px 22px;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 500;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            border: 2px solid;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn svg { width: 13px; height: 13px; flex-shrink: 0; }
+        .btn-navy { background: var(--navy); color: var(--white); border-color: var(--navy); }
+        .btn-navy:hover { background: transparent; color: var(--navy); }
+        .btn-orange { background: var(--orange); color: var(--white); border-color: var(--orange); }
+        .btn-orange:hover { background: transparent; color: var(--orange); }
+        .btn-red { background: #C0392B; color: var(--white); border-color: #C0392B; }
+        .btn-red:hover { background: transparent; color: #C0392B; }
+
+        .drag-hint { font-size: 0.72rem; color: #9AAABF; margin-top: 8px; font-style: italic; }
+
+        /* File chip */
+        .file-chip {
+            display: none;
+            margin-top: 14px;
+            padding: 10px 14px;
+            background: var(--white);
+            border-left: 3px solid var(--orange);
+            border: 1px solid var(--blue-light);
+            border-left: 3px solid var(--orange);
+        }
+        .file-chip.visible { display: block; }
+        .file-chip.green { border-left-color: var(--green); }
+        .chip-name { font-family: 'Oswald', sans-serif; font-size: 0.85rem; font-weight: 500; color: var(--navy); word-break: break-all; }
+        .chip-size { font-size: 0.72rem; color: #9AAABF; margin-top: 2px; }
+        .chip-remove { margin-top: 8px; background: transparent; border: 1px solid var(--orange); color: var(--orange); padding: 2px 10px; font-size: 0.7rem; font-family: 'Oswald', sans-serif; letter-spacing: 1px; cursor: pointer; transition: all 0.15s; display: inline-block; }
+        .chip-remove:hover { background: var(--orange); color: var(--white); }
+
+        /* Gmail */
+        .gmail-ok { display: none; margin-top: 12px; padding: 10px 14px; background: rgba(0,104,94,0.07); border-left: 3px solid var(--green); font-size: 0.82rem; color: var(--green); font-weight: 500; flex-direction: row; align-items: center; gap: 10px; }
+        .gmail-ok.visible { display: flex; }
+        .btn-disconnect { margin-left: auto; background: transparent; border: 1px solid var(--green); color: var(--green); padding: 2px 10px; font-size: 0.7rem; cursor: pointer; font-family: 'Oswald', sans-serif; letter-spacing: 1px; transition: all 0.15s; }
+        .btn-disconnect:hover { background: var(--green); color: var(--white); }
+        .label-field { margin-top: 14px; display: none; }
+        .label-field label { display: block; font-family: 'Oswald', sans-serif; font-size: 0.68rem; letter-spacing: 4px; color: var(--navy); text-transform: uppercase; margin-bottom: 7px; }
+        .label-field input { width: 100%; padding: 9px 12px; border: 2px solid var(--blue-light); background: var(--white); color: var(--navy); font-family: 'Roboto', sans-serif; font-size: 0.88rem; transition: border-color 0.2s; }
+        .label-field input:focus { outline: none; border-color: var(--navy); }
+
+        /* ══════════════════════════════════════
+           BANDE ACTION NAVY
+        ══════════════════════════════════════ */
+        .action-strip {
+            background: var(--navy);
+            padding: 22px 56px;
+            display: flex;
+            align-items: center;
+            gap: 28px;
+            position: relative;
+        }
+        /* Accent diagonal (style NETEXIAL) */
+        .action-strip::before {
+            content: '';
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 4px;
+            background: var(--orange);
+        }
+        .action-strip::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 4px;
+            border-top: 68px solid var(--orange);
+            border-right: 32px solid transparent;
+        }
+        .action-label {
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.68rem;
+            letter-spacing: 5px;
+            color: var(--blue-med);
+            text-transform: uppercase;
+            padding-left: 36px;
+        }
+
+        /* Grand bouton lancer */
+        .btn-launch {
+            display: inline-flex;
+            align-items: center;
+            gap: 14px;
+            padding: 16px 52px;
+            font-family: 'Oswald', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 700;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            border: 2px solid;
+            cursor: pointer;
+            transition: all 0.25s;
+            position: relative;
+            overflow: hidden;
+        }
+        .btn-launch svg { width: 18px; height: 18px; flex-shrink: 0; }
+        .btn-launch::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: var(--white);
+            transform: scaleX(0);
+            transform-origin: right;
+            transition: transform 0.28s cubic-bezier(.77,0,.18,1);
+        }
+        .btn-launch > * { position: relative; z-index: 1; }
+        .btn-launch.orange-btn { background: var(--orange); color: var(--white); border-color: var(--orange); }
+        .btn-launch.orange-btn:not(:disabled):hover { color: var(--orange); }
+        .btn-launch.orange-btn:not(:disabled):hover::after { transform: scaleX(1); }
+        .btn-launch.navy-btn { background: var(--navy-mid); color: var(--white); border-color: var(--blue-med); }
+        .btn-launch.navy-btn:not(:disabled):hover { color: var(--navy); }
+        .btn-launch.navy-btn:not(:disabled):hover::after { transform: scaleX(1); }
+        .btn-launch.red-btn { background: #C0392B; color: var(--white); border-color: #C0392B; }
+        .btn-launch.red-btn:not(:disabled):hover { color: #C0392B; }
+        .btn-launch.red-btn:not(:disabled):hover::after { transform: scaleX(1); }
+        .btn-launch:disabled {
+            background: rgba(152,178,221,0.25);
+            border-color: rgba(152,178,221,0.2);
+            color: rgba(152,178,221,0.4);
+            cursor: not-allowed;
+        }
+
+        .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.35); border-top-color: white; border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ══════════════════════════════════════
+           FEEDBACK / RÉSULTATS
+        ══════════════════════════════════════ */
+        .feedback-zone {
+            background: var(--navy-dark);
+            padding: 28px 56px;
+            border-top: 1px solid rgba(152,178,221,0.1);
+        }
+
+        .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .progress-lbl { font-family: 'Oswald', sans-serif; font-size: 0.7rem; letter-spacing: 4px; color: var(--blue-med); text-transform: uppercase; }
+        .progress-count { font-size: 0.8rem; color: var(--blue-med); font-weight: 300; }
+        .progress-track { background: rgba(152,178,221,0.12); height: 3px; margin-bottom: 10px; }
+        .progress-bar { height: 100%; background: var(--orange); transition: width 0.3s; }
+        .progress-file { font-size: 0.77rem; color: rgba(152,178,221,0.5); margin-bottom: 20px; }
+        .progress-file strong { color: var(--blue-med); }
+
+        .status-block { display: flex; align-items: flex-start; gap: 16px; padding: 18px 0; border-top: 1px solid rgba(152,178,221,0.08); }
+        .status-ico { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-size: 1rem; flex-shrink: 0; }
+        .status-block.ok .status-ico { color: var(--green); }
+        .status-block.ko .status-ico { color: #E74C3C; }
+        .status-block.wait .status-ico { color: var(--orange); }
+        .status-title { font-family: 'Oswald', sans-serif; font-size: 0.88rem; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 3px; }
+        .status-block.ok .status-title { color: #5DCFA0; }
+        .status-block.ko .status-title { color: #E74C3C; }
+        .status-block.wait .status-title { color: var(--orange); }
+        .status-sub { font-size: 0.8rem; color: rgba(152,178,221,0.55); }
+
+        .btn-dl {
+            display: inline-flex; align-items: center; gap: 10px;
+            margin-top: 14px; padding: 13px 38px;
+            background: var(--green); color: var(--white);
+            border: 2px solid var(--green);
+            font-family: 'Oswald', sans-serif; font-size: 0.82rem; font-weight: 600;
+            letter-spacing: 3px; text-transform: uppercase; cursor: pointer; transition: all 0.2s;
+        }
+        .btn-dl:hover { background: transparent; color: var(--green); }
+        .btn-dl svg { width: 15px; height: 15px; }
+
+        /* ══════════════════════════════════════
+           FOOTER
+        ══════════════════════════════════════ */
+        .site-footer {
+            background: var(--navy);
+            padding: 20px 56px;
+            display: flex;
+            align-items: center;
+            gap: 24px;
+            position: relative;
+            z-index: 10;
+        }
+        .footer-line { flex: 1; height: 1px; background: rgba(152,178,221,0.12); }
+        .footer-copy { font-family: 'Roboto', sans-serif; font-size: 0.73rem; color: rgba(152,178,221,0.35); letter-spacing: 2px; white-space: nowrap; }
+        .footer-copy strong { font-family: 'Oswald', sans-serif; color: rgba(252,97,0,0.6); letter-spacing: 4px; }
+
+        /* ══════════════════════════════════════
+           RESPONSIVE
+        ══════════════════════════════════════ */
+        @media (max-width: 768px) {
+            .site-header, .hero, .panel-body, .action-strip, .feedback-zone, .tabs-row, .site-footer { padding-left: 20px; padding-right: 20px; }
+            .tabs-row { padding-left: 20px; overflow-x: auto; }
+            .tab-btn { padding: 12px 18px; font-size: 0.75rem; }
+            .argos-title { font-size: 3.2rem; }
+            .cards-grid { grid-template-columns: 1fr; }
+            .action-strip { flex-direction: column; align-items: stretch; }
+        }
+
+        [hidden] { display: none !important; }
+
+        /* ── Transitions d'entrée ── */
+        @keyframes fadeUp { from { opacity:0; transform:translateY(16px); } to { opacity:1; transform:translateY(0); } }
+        .hero-tag-block { animation: fadeUp 0.5s ease both; }
+        .argos-title    { animation: fadeUp 0.5s 0.1s ease both; }
+        .hero-divider-row { animation: fadeUp 0.5s 0.2s ease both; }
+        .hero-desc      { animation: fadeUp 0.5s 0.3s ease both; }
+        .interface-block { animation: fadeUp 0.6s 0.35s ease both; }
     </style>
 </head>
 <body>
-    <img src="robot.png" alt="" class="robot-bg">
-    <div class="pattern-overlay"></div>
-    <div class="orange-slash"></div>
 
-    <header class="header">
-        <a href="/" class="logo-mark">
-            <span class="logo-symbol">
-                <svg viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <circle cx="16" cy="6" r="3.5" stroke="white" stroke-width="1.6"/>
-                    <line x1="16" y1="9.5" x2="16" y2="20" stroke="white" stroke-width="1.6"/>
-                    <line x1="16" y1="20" x2="5" y2="38" stroke="white" stroke-width="1.6"/>
-                    <line x1="16" y1="20" x2="27" y2="38" stroke="white" stroke-width="1.6"/>
-                    <line x1="9" y1="15.5" x2="23" y2="15.5" stroke="white" stroke-width="1.6"/>
-                    <line x1="4" y1="17" x2="9" y2="15.5" stroke="white" stroke-width="1.2" opacity="0.45"/>
-                    <line x1="28" y1="17" x2="23" y2="15.5" stroke="white" stroke-width="1.2" opacity="0.45"/>
-                </svg>
-            </span>
-            <span class="logo-name">NETEXIAL</span>
+    <!-- ── Éléments de fond ── -->
+    <img src="robot.png" alt="" class="robot-bg">
+    <div class="pattern-hero"></div>
+    <div class="stripe-orange"></div>
+    <div class="deco-block"></div>
+
+    <!-- ════════════════════════
+         HEADER
+    ═════════════════════════ -->
+    <header class="site-header">
+        <a href="/" class="logo-wrap">
+            <img src="logo2.png" alt="NETEXIAL" style="height:36px;width:auto;">
         </a>
-        <div class="header-sep"></div>
-        <span class="header-dept">Extraction intelligente</span>
-        <div class="header-pill">Outil interne</div>
+        <div class="header-divider"></div>
+        <span class="header-sub">Extraction intelligente</span>
+        <div class="header-tag">Outil interne</div>
     </header>
 
-    <div class="hero-body">
-        <div class="hero-tag">Système d'extraction de données</div>
-        <div class="hero-title-argos">
-            <span class="argos-letter">A</span><span class="argos-letter">R</span><span class="argos-letter">G</span><span class="argos-letter">O</span><span class="argos-letter">S</span>
+    <!-- ════════════════════════
+         HERO
+    ═════════════════════════ -->
+    <section class="hero">
+        <div class="hero-tag-block">
+            <span>Système d'extraction de données</span>
         </div>
-        <div class="hero-divider">
-            <div class="hero-divider-line"></div>
-            <span class="hero-divider-text">Parce que la précision est non négociable</span>
-        </div>
-        <p class="hero-subtitle">Analysez vos documents, extrayez vos données structurées et exportez vers vos templates XML en quelques secondes.</p>
-    </div>
 
-    <div class="panel-container">
-        <div class="mode-tabs">
-            <button class="mode-tab active" onclick="switchMode('single')">
+        <!-- ARGOS en Monoton — A et S en orange -->
+        <div class="argos-title"><span style="color:var(--orange)">A</span><span style="color:var(--navy)">RGO</span><span style="color:var(--orange)">S</span></div>
+
+        <div class="hero-divider-row">
+            <div class="divider-line-short"></div>
+            <span class="divider-tagline">Parce que la <span style="color:var(--orange)">précision</span> est non <span style="color:var(--orange)">négociable</span></span>
+        </div>
+
+        <p class="hero-desc">
+            Analysez vos documents, extrayez vos données structurées
+            et exportez vers vos templates XML en quelques secondes.
+        </p>
+    </section>
+
+    <!-- ════════════════════════
+         INTERFACE PRINCIPALE
+    ═════════════════════════ -->
+    <div class="interface-block">
+
+        <!-- Onglets -->
+        <div class="tabs-row">
+            <button class="tab-btn active" onclick="switchMode('single')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Fichier unique
             </button>
-            <button class="mode-tab" onclick="switchMode('batch')">
+            <button class="tab-btn" onclick="switchMode('batch')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><rect x="16" y="2" width="6" height="6" rx="1"/><rect x="2" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
                 Mode batch
             </button>
-            <button class="mode-tab" onclick="switchMode('email')">
+            <button class="tab-btn" onclick="switchMode('email')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
                 Gmail
             </button>
         </div>
 
-        <div class="panel-white">
-            <div class="mode-panel active" id="singleMode">
-                <div class="section-label">Étape 01 — Documents</div>
-                <div class="section-heading">Téléverser les fichiers</div>
-                <div class="cards-row">
-                    <div class="drop-card" id="sourceDropZone">
-                        <div class="card-icon-row">
-                            <div class="card-picto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
-                            <div><div class="card-name">Document source</div><div class="card-sub">PDF · Image · Word · Texte</div></div>
-                        </div>
-                        <input type="file" id="sourceFile" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" hidden>
-                        <button class="btn btn-navy" onclick="document.getElementById('sourceFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
-                        <div class="drag-note">ou glisser-déposer ici</div>
-                        <div class="file-chip" id="sourceFileInfo"></div>
-                    </div>
-                    <div class="drop-card" id="templateDropZone">
-                        <div class="card-icon-row">
-                            <div class="card-picto orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
-                            <div><div class="card-name">Template XML</div><div class="card-sub">Structure NETEXIAL</div></div>
-                        </div>
-                        <input type="file" id="templateFile" accept=".xml" hidden>
-                        <button class="btn btn-orange" onclick="document.getElementById('templateFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
-                        <div class="drag-note">ou glisser-déposer ici</div>
-                        <div class="file-chip" id="templateFileInfo"></div>
-                    </div>
-                </div>
-            </div>
+        <!-- Panneau blanc -->
+        <div class="main-panel">
+            <div class="panel-body">
 
-            <div class="mode-panel" id="batchMode">
-                <div class="section-label">Traitement en série</div>
-                <div class="section-heading">Mode batch</div>
-                <div class="cards-row">
-                    <div class="drop-card" id="batchSourceDropZone">
-                        <div class="card-icon-row">
-                            <div class="card-picto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
-                            <div><div class="card-name">Documents sources</div><div class="card-sub">Sélection multiple</div></div>
+                <!-- SINGLE -->
+                <div class="mode-panel active" id="singleMode">
+                    <div class="panel-eyebrow">Étape 01 — Documents</div>
+                    <div class="panel-title">Téléverser les fichiers</div>
+                    <div class="cards-grid">
+                        <div class="drop-card" id="sourceDropZone">
+                            <div class="card-header">
+                                <div class="card-picto">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+                                </div>
+                                <div><div class="card-label">Document source</div><div class="card-desc">PDF · Image · Word · Texte</div></div>
+                            </div>
+                            <input type="file" id="sourceFile" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" hidden>
+                            <button class="btn btn-navy" onclick="document.getElementById('sourceFile').click()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Parcourir
+                            </button>
+                            <div class="drag-hint">ou glisser-déposer ici</div>
+                            <div class="file-chip" id="sourceFileInfo"></div>
                         </div>
-                        <input type="file" id="batchSourceFiles" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" multiple hidden>
-                        <button class="btn btn-navy" onclick="document.getElementById('batchSourceFiles').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
-                        <div class="drag-note">ou glisser-déposer ici</div>
-                        <div class="file-chip" id="batchSourceFileInfo"></div>
-                    </div>
-                    <div class="drop-card" id="batchTemplateDropZone">
-                        <div class="card-icon-row">
-                            <div class="card-picto orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
-                            <div><div class="card-name">Template XML</div><div class="card-sub">Un template pour tous</div></div>
+                        <div class="drop-card" id="templateDropZone">
+                            <div class="card-header">
+                                <div class="card-picto p-orange">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                </div>
+                                <div><div class="card-label">Template XML</div><div class="card-desc">Structure NETEXIAL</div></div>
+                            </div>
+                            <input type="file" id="templateFile" accept=".xml" hidden>
+                            <button class="btn btn-orange" onclick="document.getElementById('templateFile').click()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Parcourir
+                            </button>
+                            <div class="drag-hint">ou glisser-déposer ici</div>
+                            <div class="file-chip" id="templateFileInfo"></div>
                         </div>
-                        <input type="file" id="batchTemplateFile" accept=".xml" hidden>
-                        <button class="btn btn-orange" onclick="document.getElementById('batchTemplateFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
-                        <div class="drag-note">ou glisser-déposer ici</div>
-                        <div class="file-chip" id="batchTemplateFileInfo"></div>
                     </div>
                 </div>
-            </div>
 
-            <div class="mode-panel" id="emailMode">
-                <div class="section-label">Extraction automatique</div>
-                <div class="section-heading">Mode Gmail</div>
-                <div class="cards-row">
-                    <div class="drop-card" id="gmailCard">
-                        <div class="card-icon-row">
-                            <div class="card-picto gmail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
-                            <div><div class="card-name">Connexion Gmail</div><div class="card-sub">OAuth Google sécurisé</div></div>
+                <!-- BATCH -->
+                <div class="mode-panel" id="batchMode">
+                    <div class="panel-eyebrow">Traitement en série</div>
+                    <div class="panel-title">Mode batch</div>
+                    <div class="cards-grid">
+                        <div class="drop-card" id="batchSourceDropZone">
+                            <div class="card-header">
+                                <div class="card-picto">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                                </div>
+                                <div><div class="card-label">Documents sources</div><div class="card-desc">Sélection multiple</div></div>
+                            </div>
+                            <input type="file" id="batchSourceFiles" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" multiple hidden>
+                            <button class="btn btn-navy" onclick="document.getElementById('batchSourceFiles').click()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Parcourir
+                            </button>
+                            <div class="drag-hint">ou glisser-déposer ici</div>
+                            <div class="file-chip" id="batchSourceFileInfo"></div>
                         </div>
-                        <button class="btn btn-red" id="gmailConnectBtn" onclick="connectGmail()" style="gap:10px">
-                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                            <span id="gmailBtnText">Se connecter</span>
-                        </button>
-                        <div class="gmail-connected-msg" id="gmailStatus"><span>✓ Compte connecté</span><button class="btn-disconnect" onclick="disconnectGmail()">Déconnecter</button></div>
-                        <div class="label-field" id="labelInput"><label>Libellé Gmail</label><input type="text" id="gmailLabel" value="ARGOS" placeholder="ex : ARGOS"></div>
-                    </div>
-                    <div class="drop-card" id="emailTemplateDropZone">
-                        <div class="card-icon-row">
-                            <div class="card-picto orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
-                            <div><div class="card-name">Template XML</div><div class="card-sub">Structure pour les emails</div></div>
+                        <div class="drop-card" id="batchTemplateDropZone">
+                            <div class="card-header">
+                                <div class="card-picto p-orange">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                </div>
+                                <div><div class="card-label">Template XML</div><div class="card-desc">Un template pour tous</div></div>
+                            </div>
+                            <input type="file" id="batchTemplateFile" accept=".xml" hidden>
+                            <button class="btn btn-orange" onclick="document.getElementById('batchTemplateFile').click()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Parcourir
+                            </button>
+                            <div class="drag-hint">ou glisser-déposer ici</div>
+                            <div class="file-chip" id="batchTemplateFileInfo"></div>
                         </div>
-                        <input type="file" id="emailTemplateFile" accept=".xml" hidden>
-                        <button class="btn btn-orange" onclick="document.getElementById('emailTemplateFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
-                        <div class="drag-note">ou glisser-déposer ici</div>
-                        <div class="file-chip" id="emailTemplateFileInfo"></div>
                     </div>
                 </div>
+
+                <!-- EMAIL -->
+                <div class="mode-panel" id="emailMode">
+                    <div class="panel-eyebrow">Extraction automatique</div>
+                    <div class="panel-title">Mode Gmail</div>
+                    <div class="cards-grid">
+                        <div class="drop-card" id="gmailCard">
+                            <div class="card-header">
+                                <div class="card-picto p-red">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                                </div>
+                                <div><div class="card-label">Connexion Gmail</div><div class="card-desc">OAuth Google sécurisé</div></div>
+                            </div>
+                            <button class="btn btn-red" id="gmailConnectBtn" onclick="connectGmail()" style="gap:10px">
+                                <svg viewBox="0 0 24 24" fill="currentColor" width="13" height="13"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                                <span id="gmailBtnText">Se connecter</span>
+                            </button>
+                            <div class="gmail-ok" id="gmailStatus">
+                                <span>✓ Connecté</span>
+                                <button class="btn-disconnect" onclick="disconnectGmail()">Déconnecter</button>
+                            </div>
+                            <div class="label-field" id="labelInput">
+                                <label>Libellé Gmail</label>
+                                <input type="text" id="gmailLabel" value="ARGOS" placeholder="ex : ARGOS">
+                            </div>
+                        </div>
+                        <div class="drop-card" id="emailTemplateDropZone">
+                            <div class="card-header">
+                                <div class="card-picto p-orange">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                                </div>
+                                <div><div class="card-label">Template XML</div><div class="card-desc">Structure emails</div></div>
+                            </div>
+                            <input type="file" id="emailTemplateFile" accept=".xml" hidden>
+                            <button class="btn btn-orange" onclick="document.getElementById('emailTemplateFile').click()">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                                Parcourir
+                            </button>
+                            <div class="drag-hint">ou glisser-déposer ici</div>
+                            <div class="file-chip" id="emailTemplateFileInfo"></div>
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
 
-        <div class="action-band">
-            <span class="action-band-label">Étape 02 — Lancer</span>
-            <button class="btn-launch" id="analyzeBtn" disabled>
-                <span class="btn-c" style="display:flex;align-items:center;gap:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>Lancer l'analyse</span>
+        <!-- BANDE ACTION -->
+        <div class="action-strip">
+            <span class="action-label">Étape 02 — Lancer l'extraction</span>
+
+            <button class="btn-launch orange-btn" id="analyzeBtn" disabled>
+                <span class="btn-c" style="display:flex;align-items:center;gap:12px">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
+                    Lancer l'analyse
+                </span>
                 <span class="btn-l" hidden style="display:flex;align-items:center;gap:10px"><span class="spinner"></span>Traitement…</span>
             </button>
-            <button class="btn-launch batch" id="batchAnalyzeBtn" disabled hidden>
-                <span class="btn-c" style="display:flex;align-items:center;gap:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/></svg>Lancer le batch</span>
+            <button class="btn-launch navy-btn" id="batchAnalyzeBtn" disabled hidden>
+                <span class="btn-c" style="display:flex;align-items:center;gap:12px">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/></svg>
+                    Lancer le batch
+                </span>
                 <span class="btn-l" hidden style="display:flex;align-items:center;gap:10px"><span class="spinner"></span>Traitement…</span>
             </button>
-            <button class="btn-launch email" id="emailAnalyzeBtn" disabled hidden>
-                <span class="btn-c" style="display:flex;align-items:center;gap:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Analyser les emails</span>
+            <button class="btn-launch red-btn" id="emailAnalyzeBtn" disabled hidden>
+                <span class="btn-c" style="display:flex;align-items:center;gap:12px">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+                    Analyser les emails
+                </span>
                 <span class="btn-l" hidden style="display:flex;align-items:center;gap:10px"><span class="spinner"></span>Analyse…</span>
             </button>
         </div>
 
+        <!-- FEEDBACK -->
         <div class="feedback-zone" id="feedbackZone" hidden>
             <div id="progressSection" hidden>
-                <div class="progress-row"><span class="progress-lbl">Progression</span><span class="progress-count" id="progressCount">0 / 0</span></div>
-                <div class="progress-track"><div class="progress-fill" id="progressBar" style="width:0%"></div></div>
-                <div class="progress-file">En cours : <strong id="currentFileName">—</strong></div>
+                <div class="progress-header">
+                    <span class="progress-lbl">Progression</span>
+                    <span class="progress-count" id="progressCount">0 / 0</span>
+                </div>
+                <div class="progress-track"><div class="progress-bar" id="progressBar" style="width:0%"></div></div>
+                <div class="progress-file">Fichier en cours : <strong id="currentFileName">—</strong></div>
             </div>
-            <div class="status-row" id="statusCard" hidden></div>
+            <div class="status-block" id="statusCard" hidden></div>
             <div id="downloadSection" hidden>
-                <button class="btn-download" id="downloadBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span id="downloadBtnText">Télécharger</span></button>
+                <button class="btn-dl" id="downloadBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                    <span id="downloadBtnText">Télécharger</span>
+                </button>
             </div>
         </div>
+
     </div>
 
-    <footer class="footer">
+    <!-- FOOTER -->
+    <footer class="site-footer">
         <div class="footer-line"></div>
-        <span class="footer-txt">Propulsé par <strong>ARGOS</strong> · NETEXIAL 2025</span>
+        <span class="footer-copy">Propulsé par <strong>ARGOS</strong> · NETEXIAL 2025</span>
         <div class="footer-line"></div>
     </footer>
 
 <script>
-const state={mode:'single',sourceFile:null,templateFile:null,batchSourceFiles:[],batchTemplateFile:null,emailTemplateFile:null,gmailConnected:false,isProcessing:false,resultBlob:null};
+const S={mode:'single',sourceFile:null,templateFile:null,batchSourceFiles:[],batchTemplateFile:null,emailTemplateFile:null,gmailConnected:false,isProcessing:false,resultBlob:null};
 const $=id=>document.getElementById(id);
-document.addEventListener('DOMContentLoaded',()=>{initDragDrop();initFileInputs();initButtons();checkGmailAuth();checkGmailStatus();});
-function switchMode(mode){state.mode=mode;document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));const map={single:0,batch:1,email:2};document.querySelectorAll('.mode-tab')[map[mode]].classList.add('active');$(`${mode}Mode`).classList.add('active');$('analyzeBtn').hidden=mode!=='single';$('batchAnalyzeBtn').hidden=mode!=='batch';$('emailAnalyzeBtn').hidden=mode!=='email';$('feedbackZone').hidden=true;}
-function initDragDrop(){setupDrop($('sourceDropZone'),f=>handleFile('source',f));setupDrop($('templateDropZone'),f=>handleFile('template',f));setupDropMulti($('batchSourceDropZone'),files=>handleBatchFiles(files));setupDrop($('batchTemplateDropZone'),f=>handleBatchTemplate(f));setupDrop($('emailTemplateDropZone'),f=>handleEmailTemplate(f));}
-function setupDrop(z,cb){['dragenter','dragover','dragleave','drop'].forEach(e=>z.addEventListener(e,ev=>{ev.preventDefault();ev.stopPropagation();}));['dragenter','dragover'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor='var(--orange)'));['dragleave','drop'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor=''));z.addEventListener('drop',e=>{if(e.dataTransfer.files[0])cb(e.dataTransfer.files[0]);});}
-function setupDropMulti(z,cb){['dragenter','dragover','dragleave','drop'].forEach(e=>z.addEventListener(e,ev=>{ev.preventDefault();ev.stopPropagation();}));['dragenter','dragover'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor='var(--blue-primary)'));['dragleave','drop'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor=''));z.addEventListener('drop',e=>cb(Array.from(e.dataTransfer.files)));}
-function initFileInputs(){$('sourceFile').addEventListener('change',e=>{if(e.target.files[0])handleFile('source',e.target.files[0]);});$('templateFile').addEventListener('change',e=>{if(e.target.files[0])handleFile('template',e.target.files[0]);});$('batchSourceFiles').addEventListener('change',e=>handleBatchFiles(Array.from(e.target.files)));$('batchTemplateFile').addEventListener('change',e=>{if(e.target.files[0])handleBatchTemplate(e.target.files[0]);});$('emailTemplateFile').addEventListener('change',e=>{if(e.target.files[0])handleEmailTemplate(e.target.files[0]);});}
-function handleFile(type,file){state[type+'File']=file;const info=$(`${type}FileInfo`),zone=$(`${type}DropZone`);info.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${fmt(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;info.classList.add('visible');zone.classList.add('has-file');info.querySelector('.chip-remove').onclick=()=>{state[type+'File']=null;info.classList.remove('visible');zone.classList.remove('has-file');updateBtn();};updateBtn();}
-function handleBatchFiles(files){state.batchSourceFiles=[...state.batchSourceFiles,...files];const info=$('batchSourceFileInfo'),zone=$('batchSourceDropZone');if(!state.batchSourceFiles.length){info.classList.remove('visible');zone.classList.remove('has-file');return;}info.innerHTML=`<div class="chip-name">📁 ${state.batchSourceFiles.length} fichier(s)</div><div class="chip-size">${fmt(state.batchSourceFiles.reduce((s,f)=>s+f.size,0))}</div><button class="chip-remove">✕ Tout retirer</button>`;info.classList.add('visible');zone.classList.add('has-file');info.querySelector('.chip-remove').onclick=()=>{state.batchSourceFiles=[];info.classList.remove('visible');zone.classList.remove('has-file');updateBtn();};updateBtn();}
-function handleBatchTemplate(file){state.batchTemplateFile=file;const info=$('batchTemplateFileInfo'),zone=$('batchTemplateDropZone');info.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${fmt(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;info.classList.add('visible');zone.classList.add('has-file');info.querySelector('.chip-remove').onclick=()=>{state.batchTemplateFile=null;info.classList.remove('visible');zone.classList.remove('has-file');updateBtn();};updateBtn();}
-function handleEmailTemplate(file){state.emailTemplateFile=file;const info=$('emailTemplateFileInfo'),zone=$('emailTemplateDropZone');info.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${fmt(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;info.classList.add('visible');zone.classList.add('has-file');info.querySelector('.chip-remove').onclick=()=>{state.emailTemplateFile=null;info.classList.remove('visible');zone.classList.remove('has-file');updateBtn();};updateBtn();}
-function fmt(b){if(b<1024)return b+' o';if(b<1048576)return(b/1024).toFixed(1)+' Ko';return(b/1048576).toFixed(1)+' Mo';}
-function updateBtn(){$('analyzeBtn').disabled=!(state.sourceFile&&state.templateFile&&!state.isProcessing);$('batchAnalyzeBtn').disabled=!(state.batchSourceFiles.length>0&&state.batchTemplateFile&&!state.isProcessing);$('emailAnalyzeBtn').disabled=!(state.gmailConnected&&state.emailTemplateFile&&!state.isProcessing);}
-function initButtons(){$('analyzeBtn').onclick=startAnalysis;$('batchAnalyzeBtn').onclick=startBatchAnalysis;$('emailAnalyzeBtn').onclick=startEmailAnalysis;$('downloadBtn').onclick=downloadResult;$('batchAnalyzeBtn').hidden=true;$('emailAnalyzeBtn').hidden=true;}
-function setLoading(btn,on){btn.querySelector('.btn-c').hidden=on;btn.querySelector('.btn-l').hidden=!on;}
-async function startAnalysis(){if(!state.sourceFile||!state.templateFile||state.isProcessing)return;state.isProcessing=true;setLoading($('analyzeBtn'),true);updateBtn();$('feedbackZone').hidden=false;$('progressSection').hidden=true;showStatus('loading','Analyse en cours','ARGOS extrait les données du document…');try{const fd=new FormData();fd.append('source',state.sourceFile);fd.append('template',state.templateFile);const res=await fetch('/api/extract',{method:'POST',body:fd});if(!res.ok)throw new Error('Erreur serveur');state.resultBlob=await res.blob();showStatus('success','Analyse terminée','Fichier XML prêt au téléchargement.');$('downloadBtnText').textContent='Télécharger le XML';$('downloadSection').hidden=false;}catch(e){showStatus('error','Échec',e.message);}finally{state.isProcessing=false;setLoading($('analyzeBtn'),false);updateBtn();}}
-async function startBatchAnalysis(){if(!state.batchSourceFiles.length||!state.batchTemplateFile||state.isProcessing)return;state.isProcessing=true;setLoading($('batchAnalyzeBtn'),true);updateBtn();$('feedbackZone').hidden=false;$('progressSection').hidden=false;updateProgress(0,state.batchSourceFiles.length,'Préparation…');showStatus('loading','Batch en cours',`${state.batchSourceFiles.length} fichier(s) à traiter…`);try{const fd=new FormData();fd.append('template',state.batchTemplateFile);state.batchSourceFiles.forEach(f=>fd.append('sources',f));let prog=0;const iv=setInterval(()=>{if(prog<state.batchSourceFiles.length-1){prog++;updateProgress(prog,state.batchSourceFiles.length,state.batchSourceFiles[prog]?.name||'…');}},2000);const res=await fetch('/api/extract-batch',{method:'POST',body:fd});clearInterval(iv);if(!res.ok)throw new Error('Erreur serveur');state.resultBlob=await res.blob();updateProgress(state.batchSourceFiles.length,state.batchSourceFiles.length,'Terminé');showStatus('success','Batch terminé',`${state.batchSourceFiles.length} fichier(s) traité(s).`);$('downloadBtnText').textContent='Télécharger le ZIP';$('downloadSection').hidden=false;}catch(e){showStatus('error','Échec',e.message);}finally{state.isProcessing=false;setLoading($('batchAnalyzeBtn'),false);updateBtn();}}
-async function startEmailAnalysis(){if(!state.gmailConnected||!state.emailTemplateFile||state.isProcessing)return;state.isProcessing=true;setLoading($('emailAnalyzeBtn'),true);updateBtn();$('feedbackZone').hidden=false;$('progressSection').hidden=false;updateProgress(0,1,'Connexion Gmail…');showStatus('loading','Analyse emails','Récupération des emails du label…');try{const fd=new FormData();fd.append('template',state.emailTemplateFile);fd.append('label',$('gmailLabel').value||'ARGOS');const res=await fetch('/api/extract-emails',{method:'POST',body:fd,credentials:'include'});if(!res.ok){const err=await res.json();throw new Error(err.error||'Erreur serveur');}state.resultBlob=await res.blob();updateProgress(1,1,'Terminé');showStatus('success','Emails traités','Extraction complète.');$('downloadBtnText').textContent='Télécharger le ZIP';$('downloadSection').hidden=false;}catch(e){showStatus('error','Échec',e.message);}finally{state.isProcessing=false;setLoading($('emailAnalyzeBtn'),false);updateBtn();}}
-function updateProgress(cur,tot,file){$('progressBar').style.width=(cur/tot*100)+'%';$('progressCount').textContent=`${cur} / ${tot}`;$('currentFileName').textContent=file;}
-function showStatus(type,title,msg){const card=$('statusCard');card.hidden=false;const ico={success:'✓',error:'✕',loading:'<span class="spinner" style="border-color:rgba(255,149,0,.2);border-top-color:var(--orange)"></span>'};card.className='status-row '+type;card.innerHTML=`<div class="status-ico">${ico[type]}</div><div><div class="status-title">${title}</div><div class="status-msg">${msg}</div></div>`;$('downloadSection').hidden=true;}
-function downloadResult(){if(!state.resultBlob)return;const url=URL.createObjectURL(state.resultBlob);const a=document.createElement('a');a.href=url;a.download=state.mode==='single'?`argos_${Date.now()}.xml`:`argos_${state.mode}_${Date.now()}.zip`;a.click();URL.revokeObjectURL(url);}
-function checkGmailAuth(){const p=new URLSearchParams(window.location.search);if(p.get('gmail_auth')==='success'){state.gmailConnected=true;updateGmailUI(true);window.history.replaceState({},'','/');}else if(p.get('gmail_auth')==='error'){$('feedbackZone').hidden=false;showStatus('error','Échec Gmail','Impossible de se connecter.');window.history.replaceState({},'','/');};}
-async function checkGmailStatus(){try{const r=await fetch('/api/gmail/status',{credentials:'include'});const d=await r.json();state.gmailConnected=d.connected;updateGmailUI(d.connected);}catch(e){}}
+document.addEventListener('DOMContentLoaded',()=>{drops();inputs();btns();checkGmailAuth();checkGmailStatus();});
+
+function switchMode(m){
+    S.mode=m;
+    document.querySelectorAll('.tab-btn').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));
+    const idx={single:0,batch:1,email:2};
+    document.querySelectorAll('.tab-btn')[idx[m]].classList.add('active');
+    $(`${m}Mode`).classList.add('active');
+    $('analyzeBtn').hidden=m!=='single';
+    $('batchAnalyzeBtn').hidden=m!=='batch';
+    $('emailAnalyzeBtn').hidden=m!=='email';
+    $('feedbackZone').hidden=true;
+}
+function drops(){
+    sd($('sourceDropZone'),f=>hf('source',f));
+    sd($('templateDropZone'),f=>hf('template',f));
+    sdm($('batchSourceDropZone'),fs=>hbf(fs));
+    sd($('batchTemplateDropZone'),f=>hbt(f));
+    sd($('emailTemplateDropZone'),f=>het(f));
+}
+function sd(z,cb){['dragenter','dragover','dragleave','drop'].forEach(e=>z.addEventListener(e,ev=>{ev.preventDefault();ev.stopPropagation();}));['dragenter','dragover'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor='var(--orange)'));['dragleave','drop'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor=''));z.addEventListener('drop',e=>{if(e.dataTransfer.files[0])cb(e.dataTransfer.files[0]);});}
+function sdm(z,cb){['dragenter','dragover','dragleave','drop'].forEach(e=>z.addEventListener(e,ev=>{ev.preventDefault();ev.stopPropagation();}));['dragenter','dragover'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor='var(--navy)'));['dragleave','drop'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor=''));z.addEventListener('drop',e=>cb(Array.from(e.dataTransfer.files)));}
+function inputs(){$('sourceFile').addEventListener('change',e=>{if(e.target.files[0])hf('source',e.target.files[0]);});$('templateFile').addEventListener('change',e=>{if(e.target.files[0])hf('template',e.target.files[0]);});$('batchSourceFiles').addEventListener('change',e=>hbf(Array.from(e.target.files)));$('batchTemplateFile').addEventListener('change',e=>{if(e.target.files[0])hbt(e.target.files[0]);});$('emailTemplateFile').addEventListener('change',e=>{if(e.target.files[0])het(e.target.files[0]);});}
+function hf(type,file){S[type+'File']=file;const i=$(`${type}FileInfo`),z=$(`${type}DropZone`);i.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${sz(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;i.classList.add('visible');z.classList.add('has-file');i.querySelector('.chip-remove').onclick=()=>{S[type+'File']=null;i.classList.remove('visible');z.classList.remove('has-file');upd();};upd();}
+function hbf(files){S.batchSourceFiles=[...S.batchSourceFiles,...files];const i=$('batchSourceFileInfo'),z=$('batchSourceDropZone');if(!S.batchSourceFiles.length){i.classList.remove('visible');z.classList.remove('has-file');return;}i.innerHTML=`<div class="chip-name">📁 ${S.batchSourceFiles.length} fichier(s)</div><div class="chip-size">${sz(S.batchSourceFiles.reduce((a,f)=>a+f.size,0))}</div><button class="chip-remove">✕ Tout retirer</button>`;i.classList.add('visible');z.classList.add('has-file');i.querySelector('.chip-remove').onclick=()=>{S.batchSourceFiles=[];i.classList.remove('visible');z.classList.remove('has-file');upd();};upd();}
+function hbt(file){S.batchTemplateFile=file;const i=$('batchTemplateFileInfo'),z=$('batchTemplateDropZone');i.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${sz(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;i.classList.add('visible');z.classList.add('has-file');i.querySelector('.chip-remove').onclick=()=>{S.batchTemplateFile=null;i.classList.remove('visible');z.classList.remove('has-file');upd();};upd();}
+function het(file){S.emailTemplateFile=file;const i=$('emailTemplateFileInfo'),z=$('emailTemplateDropZone');i.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${sz(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;i.classList.add('visible');z.classList.add('has-file');i.querySelector('.chip-remove').onclick=()=>{S.emailTemplateFile=null;i.classList.remove('visible');z.classList.remove('has-file');upd();};upd();}
+function sz(b){if(b<1024)return b+' o';if(b<1048576)return(b/1024).toFixed(1)+' Ko';return(b/1048576).toFixed(1)+' Mo';}
+function upd(){$('analyzeBtn').disabled=!(S.sourceFile&&S.templateFile&&!S.isProcessing);$('batchAnalyzeBtn').disabled=!(S.batchSourceFiles.length>0&&S.batchTemplateFile&&!S.isProcessing);$('emailAnalyzeBtn').disabled=!(S.gmailConnected&&S.emailTemplateFile&&!S.isProcessing);}
+function btns(){$('analyzeBtn').onclick=go;$('batchAnalyzeBtn').onclick=gob;$('emailAnalyzeBtn').onclick=goe;$('downloadBtn').onclick=dl;$('batchAnalyzeBtn').hidden=true;$('emailAnalyzeBtn').hidden=true;}
+function ld(btn,on){btn.querySelector('.btn-c').hidden=on;btn.querySelector('.btn-l').hidden=!on;}
+async function go(){if(!S.sourceFile||!S.templateFile||S.isProcessing)return;S.isProcessing=true;ld($('analyzeBtn'),true);upd();$('feedbackZone').hidden=false;$('progressSection').hidden=true;st('wait','Analyse en cours','ARGOS extrait les données du document…');try{const fd=new FormData();fd.append('source',S.sourceFile);fd.append('template',S.templateFile);const r=await fetch('/api/extract',{method:'POST',body:fd});if(!r.ok)throw new Error('Erreur serveur');S.resultBlob=await r.blob();st('ok','Analyse terminée','Fichier XML prêt au téléchargement.');$('downloadBtnText').textContent='Télécharger le XML';$('downloadSection').hidden=false;}catch(e){st('ko','Échec',e.message);}finally{S.isProcessing=false;ld($('analyzeBtn'),false);upd();}}
+async function gob(){if(!S.batchSourceFiles.length||!S.batchTemplateFile||S.isProcessing)return;S.isProcessing=true;ld($('batchAnalyzeBtn'),true);upd();$('feedbackZone').hidden=false;$('progressSection').hidden=false;prog(0,S.batchSourceFiles.length,'Préparation…');st('wait','Batch en cours',`${S.batchSourceFiles.length} fichier(s) à traiter…`);try{const fd=new FormData();fd.append('template',S.batchTemplateFile);S.batchSourceFiles.forEach(f=>fd.append('sources',f));let p=0;const iv=setInterval(()=>{if(p<S.batchSourceFiles.length-1){p++;prog(p,S.batchSourceFiles.length,S.batchSourceFiles[p]?.name||'…');}},2000);const r=await fetch('/api/extract-batch',{method:'POST',body:fd});clearInterval(iv);if(!r.ok)throw new Error('Erreur serveur');S.resultBlob=await r.blob();prog(S.batchSourceFiles.length,S.batchSourceFiles.length,'Terminé');st('ok','Batch terminé',`${S.batchSourceFiles.length} fichier(s) traité(s).`);$('downloadBtnText').textContent='Télécharger le ZIP';$('downloadSection').hidden=false;}catch(e){st('ko','Échec',e.message);}finally{S.isProcessing=false;ld($('batchAnalyzeBtn'),false);upd();}}
+async function goe(){if(!S.gmailConnected||!S.emailTemplateFile||S.isProcessing)return;S.isProcessing=true;ld($('emailAnalyzeBtn'),true);upd();$('feedbackZone').hidden=false;$('progressSection').hidden=false;prog(0,1,'Connexion Gmail…');st('wait','Analyse emails','Récupération en cours…');try{const fd=new FormData();fd.append('template',S.emailTemplateFile);fd.append('label',$('gmailLabel').value||'ARGOS');const r=await fetch('/api/extract-emails',{method:'POST',body:fd,credentials:'include'});if(!r.ok){const e=await r.json();throw new Error(e.error||'Erreur serveur');}S.resultBlob=await r.blob();prog(1,1,'Terminé');st('ok','Emails traités','Extraction complète.');$('downloadBtnText').textContent='Télécharger le ZIP';$('downloadSection').hidden=false;}catch(e){st('ko','Échec',e.message);}finally{S.isProcessing=false;ld($('emailAnalyzeBtn'),false);upd();}}
+function prog(c,t,f){$('progressBar').style.width=(c/t*100)+'%';$('progressCount').textContent=`${c} / ${t}`;$('currentFileName').textContent=f;}
+function st(type,title,msg){const c=$('statusCard');c.hidden=false;const ico={ok:'✓',ko:'✕',wait:'<span class="spinner" style="border-color:rgba(252,97,0,.2);border-top-color:var(--orange)"></span>'};c.className='status-block '+type;c.innerHTML=`<div class="status-ico">${ico[type]}</div><div><div class="status-title">${title}</div><div class="status-sub">${msg}</div></div>`;$('downloadSection').hidden=true;}
+function dl(){if(!S.resultBlob)return;const url=URL.createObjectURL(S.resultBlob);const a=document.createElement('a');a.href=url;a.download=S.mode==='single'?`argos_${Date.now()}.xml`:`argos_${S.mode}_${Date.now()}.zip`;a.click();URL.revokeObjectURL(url);}
+function checkGmailAuth(){const p=new URLSearchParams(window.location.search);if(p.get('gmail_auth')==='success'){S.gmailConnected=true;uiG(true);window.history.replaceState({},'','/');}else if(p.get('gmail_auth')==='error'){$('feedbackZone').hidden=false;st('ko','Échec Gmail','Impossible de se connecter.');window.history.replaceState({},'','/');}}
+async function checkGmailStatus(){try{const r=await fetch('/api/gmail/status',{credentials:'include'});const d=await r.json();S.gmailConnected=d.connected;uiG(d.connected);}catch(e){}}
 async function connectGmail(){try{const r=await fetch('/api/gmail/auth',{credentials:'include'});const d=await r.json();if(d.auth_url)window.location.href=d.auth_url;}catch(e){}}
-async function disconnectGmail(){try{await fetch('/api/gmail/disconnect',{credentials:'include'});state.gmailConnected=false;updateGmailUI(false);}catch(e){}}
-function updateGmailUI(ok){const card=$('gmailCard'),btn=$('gmailConnectBtn'),status=$('gmailStatus'),lbl=$('labelInput');if(ok){card.classList.add('email-ok');btn.style.background='var(--green)';btn.style.borderColor='var(--green)';$('gmailBtnText').textContent='Connecté';status.classList.add('visible');lbl.style.display='block';}else{card.classList.remove('email-ok');btn.style.background='#DC3545';btn.style.borderColor='#DC3545';$('gmailBtnText').textContent='Se connecter';status.classList.remove('visible');lbl.style.display='none';}updateBtn();}
+async function disconnectGmail(){try{await fetch('/api/gmail/disconnect',{credentials:'include'});S.gmailConnected=false;uiG(false);}catch(e){}}
+function uiG(ok){const c=$('gmailCard'),b=$('gmailConnectBtn'),s=$('gmailStatus'),l=$('labelInput');if(ok){c.classList.add('connected');b.style.background='var(--green)';b.style.borderColor='var(--green)';$('gmailBtnText').textContent='Connecté';s.classList.add('visible');l.style.display='block';}else{c.classList.remove('connected');b.style.background='#C0392B';b.style.borderColor='#C0392B';$('gmailBtnText').textContent='Se connecter';s.classList.remove('visible');l.style.display='none';}upd();}
 </script>
 </body>
 </html>
