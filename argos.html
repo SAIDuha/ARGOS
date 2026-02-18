@@ -3,677 +3,176 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARGOS – Extraction Intelligente · NETEXIAL</title>
+    <title>ARGOS – NETEXIAL</title>
     <link rel="icon" type="image/png" href="icon.png">
     <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@300;400;500;600;700&family=Roboto:wght@300;400;500;700&family=Monoton&display=swap" rel="stylesheet">
     <style>
-        :root {
-            /* Palette NETEXIAL officielle */
-            --blue-primary:   #141B4D;
-            --blue-dark:      #1C3775;
-            --blue-medium:    #98B2DD;
-            --blue-light:     #C1D1EB;
-            --orange:         #FC6100;
-            --white:          #FFFFFF;
-            --green-rse:      #00685E;
-            --cleanroom:      #4696FF;
-
-            /* Utilitaires */
-            --text-primary:   #141B4D;
-            --text-light:     #FFFFFF;
-            --bg-page:        #F4F7FB;
-            --border:         #C1D1EB;
-            --shadow:         0 4px 24px rgba(20,27,77,0.10);
-            --shadow-hover:   0 8px 40px rgba(20,27,77,0.18);
-        }
-
-        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-
-        body {
-            font-family: 'Roboto', sans-serif;
-            background: var(--bg-page);
-            color: var(--text-primary);
-            min-height: 100vh;
-        }
-
-        /* ─── HEADER / NAV ─── */
-        .site-header {
-            background: var(--blue-primary);
-            padding: 0 48px;
-            display: flex;
-            align-items: center;
-            height: 72px;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 2px 16px rgba(20,27,77,0.25);
-        }
-        .site-logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            text-decoration: none;
-        }
-        .logo-symbol {
-            width: 36px;
-            height: 36px;
-            flex-shrink: 0;
-        }
-        .logo-wordmark {
-            font-family: 'Oswald', sans-serif;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--white);
-            letter-spacing: 4px;
-            text-transform: uppercase;
-        }
-        .header-divider {
-            width: 1px;
-            height: 32px;
-            background: rgba(255,255,255,0.2);
-            margin: 0 24px;
-        }
-        .header-product {
-            font-family: 'Oswald', sans-serif;
-            font-size: 1rem;
-            font-weight: 400;
-            color: var(--blue-medium);
-            letter-spacing: 3px;
-            text-transform: uppercase;
-        }
-        .header-badge {
-            margin-left: auto;
-            background: var(--orange);
-            color: var(--white);
-            font-family: 'Oswald', sans-serif;
-            font-size: 0.7rem;
-            font-weight: 600;
-            letter-spacing: 2px;
-            padding: 4px 12px;
-            text-transform: uppercase;
-        }
-
-        /* ─── HERO ─── */
-        .hero {
-            background: var(--blue-primary);
-            padding: 64px 48px 56px;
-            position: relative;
-            overflow: hidden;
-        }
-        .hero::before {
-            content: '';
-            position: absolute;
-            right: 0; top: 0; bottom: 0;
-            width: 40%;
-            background: linear-gradient(135deg, var(--blue-dark) 0%, var(--blue-primary) 100%);
-            clip-path: polygon(8% 0, 100% 0, 100% 100%, 0% 100%);
-        }
-        /* Pattern lines decoratif (inspiration guide graphique) */
-        .hero::after {
-            content: '';
-            position: absolute;
-            right: 0; top: 0; bottom: 0;
-            width: 40%;
-            background-image: repeating-linear-gradient(
-                -45deg,
-                transparent,
-                transparent 8px,
-                rgba(152,178,221,0.08) 8px,
-                rgba(152,178,221,0.08) 10px
-            );
-            clip-path: polygon(8% 0, 100% 0, 100% 100%, 0% 100%);
-        }
-        .hero-inner {
-            position: relative;
-            z-index: 1;
-            max-width: 1100px;
-            margin: 0 auto;
-        }
-        .hero-tag {
-            display: inline-block;
-            background: var(--orange);
-            color: var(--white);
-            font-family: 'Oswald', sans-serif;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 3px;
-            padding: 5px 16px;
-            text-transform: uppercase;
-            margin-bottom: 24px;
-        }
-        .hero-title {
-            font-family: 'Oswald', sans-serif;
-            font-size: clamp(3rem, 6vw, 5rem);
-            font-weight: 700;
-            color: var(--white);
-            letter-spacing: 12px;
-            text-transform: uppercase;
-            line-height: 1;
-            margin-bottom: 16px;
-        }
-        .hero-title span {
-            color: var(--orange);
-        }
-        .hero-subtitle {
-            font-family: 'Roboto', sans-serif;
-            font-size: 1.05rem;
-            font-weight: 300;
-            color: var(--blue-medium);
-            letter-spacing: 1px;
-            max-width: 480px;
-        }
-        .hero-line {
-            width: 60px;
-            height: 3px;
-            background: var(--orange);
-            margin: 28px 0;
-        }
-
-        /* ─── MODE SELECTOR ─── */
-        .mode-nav {
-            background: var(--white);
-            border-bottom: 2px solid var(--blue-light);
-            padding: 0 48px;
-            display: flex;
-            gap: 0;
-        }
-        .mode-nav-inner {
-            max-width: 1100px;
-            margin: 0 auto;
-            width: 100%;
-            display: flex;
-        }
-        .mode-tab {
-            padding: 18px 32px;
-            font-family: 'Oswald', sans-serif;
-            font-size: 0.95rem;
-            font-weight: 500;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            color: var(--blue-medium);
-            background: transparent;
-            border: none;
-            border-bottom: 3px solid transparent;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: -2px;
-        }
-        .mode-tab:hover { color: var(--blue-primary); }
-        .mode-tab.active {
-            color: var(--blue-primary);
-            border-bottom-color: var(--orange);
-        }
-        .mode-tab svg { width: 16px; height: 16px; }
-
-        /* ─── MAIN CONTENT ─── */
-        .main {
-            max-width: 1100px;
-            margin: 0 auto;
-            padding: 48px 48px 80px;
-        }
-
-        /* ─── PANELS ─── */
-        .mode-panel { display: none; }
-        .mode-panel.active { display: block; }
-
-        /* ─── SECTION HEADER ─── */
-        .section-header {
-            margin-bottom: 36px;
-        }
-        .section-label {
-            font-family: 'Oswald', sans-serif;
-            font-size: 0.75rem;
-            font-weight: 600;
-            letter-spacing: 4px;
-            color: var(--orange);
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-        .section-title {
-            font-family: 'Oswald', sans-serif;
-            font-size: 1.6rem;
-            font-weight: 700;
-            color: var(--blue-primary);
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-
-        /* ─── UPLOAD GRID ─── */
-        .upload-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 24px;
-            margin-bottom: 40px;
-        }
-
-        /* ─── UPLOAD CARD ─── */
-        .upload-card {
-            background: var(--white);
-            border: 2px solid var(--border);
-            padding: 36px 28px;
-            position: relative;
-            transition: all 0.25s;
-        }
-        .upload-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0;
-            height: 4px;
-            background: var(--blue-light);
-            transition: background 0.25s;
-        }
-        .upload-card:hover {
-            border-color: var(--blue-dark);
-            box-shadow: var(--shadow-hover);
-            transform: translateY(-2px);
-        }
-        .upload-card:hover::before { background: var(--blue-primary); }
-        .upload-card.has-file { border-color: var(--orange); }
-        .upload-card.has-file::before { background: var(--orange); }
-        .upload-card.email-connected { border-color: var(--green-rse); }
-        .upload-card.email-connected::before { background: var(--green-rse); }
-
-        .card-icon {
-            width: 56px;
-            height: 56px;
-            background: var(--blue-light);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin-bottom: 20px;
-        }
-        .card-icon svg { width: 24px; height: 24px; color: var(--blue-primary); }
-        .card-icon.orange-icon { background: rgba(252,97,0,0.1); }
-        .card-icon.orange-icon svg { color: var(--orange); }
-        .card-icon.red-icon { background: rgba(220,53,69,0.08); }
-        .card-icon.red-icon svg { color: #DC3545; }
-        .card-icon.green-icon { background: rgba(0,104,94,0.10); }
-        .card-icon.green-icon svg { color: var(--green-rse); }
-
-        .card-title {
-            font-family: 'Oswald', sans-serif;
-            font-size: 1.1rem;
-            font-weight: 600;
-            color: var(--blue-primary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 6px;
-        }
-        .card-desc {
-            font-size: 0.88rem;
-            color: #5A6A8A;
-            margin-bottom: 24px;
-            line-height: 1.5;
-        }
-
-        .btn-upload {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 11px 24px;
-            background: var(--blue-primary);
-            color: var(--white);
-            font-family: 'Oswald', sans-serif;
-            font-size: 0.85rem;
-            font-weight: 500;
-            letter-spacing: 2px;
-            text-transform: uppercase;
-            border: 2px solid var(--blue-primary);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-upload:hover {
-            background: transparent;
-            color: var(--blue-primary);
-        }
-        .btn-upload.orange {
-            background: var(--orange);
-            border-color: var(--orange);
-        }
-        .btn-upload.orange:hover {
-            background: transparent;
-            color: var(--orange);
-        }
-        .btn-upload.green {
-            background: var(--green-rse);
-            border-color: var(--green-rse);
-        }
-        .btn-upload.green:hover {
-            background: transparent;
-            color: var(--green-rse);
-        }
-        .btn-upload svg { width: 16px; height: 16px; }
-
-        .drag-hint {
-            font-size: 0.78rem;
-            color: var(--blue-medium);
-            margin-top: 10px;
-            font-style: italic;
-        }
-
-        /* File info */
-        .file-info {
-            display: none;
-            margin-top: 16px;
-            padding: 12px 16px;
-            background: rgba(252,97,0,0.06);
-            border-left: 3px solid var(--orange);
-        }
-        .file-info.visible { display: block; }
-        .file-info.green-info { background: rgba(0,104,94,0.06); border-color: var(--green-rse); }
-        .file-info.blue-info { background: rgba(20,27,77,0.05); border-color: var(--blue-primary); }
-        .file-name {
-            font-family: 'Oswald', sans-serif;
-            font-size: 0.9rem;
-            font-weight: 500;
-            color: var(--blue-primary);
-            word-break: break-all;
-        }
-        .file-size { font-size: 0.78rem; color: #5A6A8A; margin-top: 3px; }
-        .remove-file {
-            margin-top: 8px;
-            background: transparent;
-            border: 1px solid var(--orange);
-            color: var(--orange);
-            padding: 3px 10px;
-            font-size: 0.75rem;
-            font-family: 'Oswald', sans-serif;
-            letter-spacing: 1px;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .remove-file:hover { background: var(--orange); color: var(--white); }
-
-        /* Gmail */
-        .gmail-status {
-            display: none;
-            margin-top: 12px;
-            padding: 10px 14px;
-            background: rgba(0,104,94,0.08);
-            border-left: 3px solid var(--green-rse);
-            font-size: 0.85rem;
-            color: var(--green-rse);
-            font-weight: 500;
-            align-items: center;
-            gap: 10px;
-        }
-        .gmail-status.visible { display: flex; }
-        .disconnect-btn {
-            margin-left: auto;
-            background: transparent;
-            border: 1px solid var(--green-rse);
-            color: var(--green-rse);
-            padding: 2px 10px;
-            font-size: 0.75rem;
-            cursor: pointer;
-            font-family: 'Oswald', sans-serif;
-            letter-spacing: 1px;
-            transition: all 0.2s;
-        }
-        .disconnect-btn:hover { background: var(--green-rse); color: var(--white); }
-
-        .label-input { margin-top: 16px; display: none; }
-        .label-input label {
-            display: block;
-            font-family: 'Oswald', sans-serif;
-            font-size: 0.8rem;
-            letter-spacing: 2px;
-            color: var(--blue-primary);
-            text-transform: uppercase;
-            margin-bottom: 8px;
-        }
-        .label-input input {
-            width: 100%;
-            padding: 10px 14px;
-            border: 2px solid var(--border);
-            background: var(--bg-page);
-            color: var(--blue-primary);
-            font-family: 'Roboto', sans-serif;
-            font-size: 0.9rem;
-            transition: border-color 0.2s;
-        }
-        .label-input input:focus {
-            outline: none;
-            border-color: var(--blue-primary);
-        }
-
-        /* ─── ACTION BUTTON ─── */
-        .action-row {
-            display: flex;
-            justify-content: center;
-            margin-bottom: 40px;
-        }
-        .btn-analyze {
-            padding: 18px 56px;
-            font-family: 'Oswald', sans-serif;
-            font-size: 1.1rem;
-            font-weight: 600;
-            letter-spacing: 4px;
-            text-transform: uppercase;
-            background: var(--orange);
-            color: var(--white);
-            border: 2px solid var(--orange);
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            transition: all 0.25s;
-            position: relative;
-        }
-        .btn-analyze::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            background: var(--blue-primary);
-            transform: scaleX(0);
-            transform-origin: left;
-            transition: transform 0.25s;
-            z-index: 0;
-        }
-        .btn-analyze:not(:disabled):hover {
-            border-color: var(--blue-primary);
-            color: var(--white);
-        }
-        .btn-analyze:not(:disabled):hover::after { transform: scaleX(1); }
-        .btn-analyze > * { position: relative; z-index: 1; }
-        .btn-analyze svg { width: 20px; height: 20px; }
-        .btn-analyze:disabled {
-            background: var(--blue-light);
-            border-color: var(--blue-light);
-            color: var(--blue-medium);
-            cursor: not-allowed;
-        }
-        .btn-analyze.batch-btn { background: var(--blue-dark); border-color: var(--blue-dark); }
-        .btn-analyze.batch-btn::after { background: var(--blue-primary); }
-        .btn-analyze.batch-btn:disabled { background: var(--blue-light); border-color: var(--blue-light); }
-
-        .spinner {
-            width: 18px; height: 18px;
-            border: 2px solid rgba(255,255,255,0.4);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* ─── PROGRESS ─── */
-        .progress-section {
-            background: var(--white);
-            border: 2px solid var(--border);
-            padding: 28px 32px;
-            margin-bottom: 28px;
-        }
-        .progress-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-        .progress-title {
-            font-family: 'Oswald', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--blue-primary);
-            text-transform: uppercase;
-            letter-spacing: 2px;
-        }
-        .progress-count { font-size: 0.85rem; color: #5A6A8A; }
-        .progress-track {
-            background: var(--blue-light);
-            height: 6px;
-            margin-bottom: 12px;
-        }
-        .progress-fill {
-            height: 100%;
-            background: var(--orange);
-            transition: width 0.3s;
-        }
-        .progress-current {
-            font-size: 0.82rem;
-            color: #5A6A8A;
-        }
-        .progress-current strong { color: var(--blue-primary); }
-
-        /* ─── STATUS / RESULT ─── */
-        .status-card {
-            display: flex;
-            align-items: flex-start;
-            gap: 16px;
-            padding: 24px 28px;
-            background: var(--white);
-            border: 2px solid var(--border);
-            margin-bottom: 20px;
-        }
-        .status-card.success { border-color: var(--green-rse); border-left: 6px solid var(--green-rse); }
-        .status-card.error { border-color: #DC3545; border-left: 6px solid #DC3545; }
-        .status-card.loading { border-color: var(--orange); border-left: 6px solid var(--orange); }
-
-        .status-icon {
-            width: 40px; height: 40px;
-            display: flex; align-items: center; justify-content: center;
-            font-size: 1.2rem;
-            flex-shrink: 0;
-        }
-        .status-card.success .status-icon { color: var(--green-rse); }
-        .status-card.error .status-icon { color: #DC3545; }
-        .status-card.loading .status-icon { color: var(--orange); }
-        .status-title {
-            font-family: 'Oswald', sans-serif;
-            font-size: 1rem;
-            font-weight: 600;
-            color: var(--blue-primary);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 4px;
-        }
-        .status-msg { font-size: 0.88rem; color: #5A6A8A; }
-
-        /* ─── DOWNLOAD ─── */
-        .download-row { text-align: center; }
-        .btn-download {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            padding: 16px 44px;
-            background: var(--green-rse);
-            color: var(--white);
-            font-family: 'Oswald', sans-serif;
-            font-size: 0.95rem;
-            font-weight: 600;
-            letter-spacing: 3px;
-            text-transform: uppercase;
-            border: 2px solid var(--green-rse);
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-download:hover { background: transparent; color: var(--green-rse); }
-        .btn-download svg { width: 18px; height: 18px; }
-
-        /* ─── FOOTER ─── */
-        .site-footer {
-            background: var(--blue-primary);
-            padding: 28px 48px;
-            text-align: center;
-        }
-        .footer-inner {
-            max-width: 1100px;
-            margin: 0 auto;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-        }
-        .footer-line { width: 80px; height: 1px; background: rgba(255,255,255,0.2); }
-        .footer-text {
-            font-family: 'Roboto', sans-serif;
-            font-size: 0.82rem;
-            color: var(--blue-medium);
-            letter-spacing: 1px;
-        }
-        .footer-text strong {
-            font-family: 'Oswald', sans-serif;
-            color: var(--orange);
-            font-size: 0.9rem;
-            letter-spacing: 3px;
-        }
-
-        /* ─── RESPONSIVE ─── */
-        @media (max-width: 768px) {
-            .site-header { padding: 0 20px; }
-            .hero { padding: 40px 20px 36px; }
-            .hero::before, .hero::after { display: none; }
-            .main { padding: 32px 20px 60px; }
-            .mode-nav { padding: 0 20px; overflow-x: auto; }
-            .mode-tab { padding: 14px 20px; font-size: 0.82rem; }
-            .upload-grid { grid-template-columns: 1fr; }
-            .btn-analyze { width: 100%; justify-content: center; padding: 16px 24px; }
-            .header-badge { display: none; }
-            .site-footer { padding: 20px; }
-        }
-
-        [hidden] { display: none !important; }
+        :root{--blue-primary:#141B4D;--blue-dark:#1C3775;--blue-medium:#98B2DD;--blue-light:#C1D1EB;--orange:#FC6100;--white:#FFFFFF;--green:#00685E;--bg:#EEF2F8;}
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+        body{font-family:'Roboto',sans-serif;background:var(--blue-primary);color:var(--white);min-height:100vh;overflow-x:hidden;}
+        .robot-bg{position:fixed;right:-60px;bottom:0;height:95vh;width:auto;pointer-events:none;z-index:0;filter:drop-shadow(-40px 0 80px rgba(20,27,77,0.8));}
+        @media(max-width:900px){.robot-bg{display:none;}}
+        .pattern-overlay{position:fixed;inset:0;pointer-events:none;z-index:0;background-image:repeating-linear-gradient(-45deg,transparent 0px,transparent 18px,rgba(152,178,221,0.04) 18px,rgba(152,178,221,0.04) 20px);}
+        .orange-slash{position:fixed;top:0;right:0;width:6px;height:100vh;background:var(--orange);z-index:1;}
+        .header{position:relative;z-index:10;padding:28px 48px;display:flex;align-items:center;}
+        .logo-mark{display:flex;align-items:center;gap:12px;text-decoration:none;}
+        .logo-symbol svg{width:32px;height:32px;}
+        .logo-name{font-family:'Oswald',sans-serif;font-weight:700;font-size:1.3rem;letter-spacing:6px;color:var(--white);text-transform:uppercase;}
+        .header-sep{width:1px;height:28px;background:rgba(152,178,221,0.3);margin:0 24px;}
+        .header-dept{font-family:'Roboto',sans-serif;font-size:0.75rem;font-weight:300;color:var(--blue-medium);letter-spacing:3px;text-transform:uppercase;}
+        .header-pill{margin-left:auto;border:1px solid var(--orange);color:var(--orange);font-family:'Oswald',sans-serif;font-size:0.7rem;letter-spacing:3px;padding:5px 16px;text-transform:uppercase;}
+        .hero-body{position:relative;z-index:5;padding:0 48px 40px;max-width:660px;}
+        .hero-tag{display:inline-block;background:var(--orange);font-family:'Oswald',sans-serif;font-size:0.7rem;font-weight:600;letter-spacing:4px;padding:6px 18px;text-transform:uppercase;margin-bottom:32px;}
+        .hero-title-argos{font-family:'Monoton',cursive;font-size:clamp(3.5rem,8vw,6.5rem);color:var(--white);line-height:1;margin-bottom:8px;}
+        .hero-title-argos .argos-letter{display:inline-block;transition:color 0.2s;}
+        .hero-title-argos:hover .argos-letter:nth-child(odd){color:var(--orange);}
+        .hero-title-argos:hover .argos-letter:nth-child(even){color:var(--blue-medium);}
+        .hero-divider{display:flex;align-items:center;gap:16px;margin:24px 0;}
+        .hero-divider-line{width:48px;height:3px;background:var(--orange);}
+        .hero-divider-text{font-family:'Oswald',sans-serif;font-size:0.75rem;font-weight:400;letter-spacing:4px;color:var(--blue-medium);text-transform:uppercase;}
+        .hero-subtitle{font-family:'Roboto',sans-serif;font-size:1rem;font-weight:300;color:var(--blue-light);line-height:1.7;max-width:420px;margin-bottom:48px;}
+        .panel-container{position:relative;z-index:10;}
+        .mode-tabs{display:flex;margin-left:48px;}
+        .mode-tab{padding:14px 28px;font-family:'Oswald',sans-serif;font-size:0.85rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;background:rgba(20,27,77,0.5);color:var(--blue-medium);border:1px solid rgba(152,178,221,0.15);border-bottom:none;cursor:pointer;transition:all 0.2s;display:flex;align-items:center;gap:8px;position:relative;}
+        .mode-tab svg{width:14px;height:14px;}
+        .mode-tab:hover{color:var(--white);background:rgba(28,55,117,0.7);}
+        .mode-tab.active{background:var(--white);color:var(--blue-primary);border-color:var(--white);}
+        .mode-tab.active::after{content:'';position:absolute;bottom:-3px;left:0;right:0;height:3px;background:var(--white);}
+        .panel-white{background:var(--white);color:var(--blue-primary);padding:40px 48px;position:relative;}
+        .panel-white::before{content:'';position:absolute;top:0;left:0;right:0;height:4px;background:linear-gradient(90deg,var(--orange) 0%,var(--orange) 40%,var(--blue-medium) 100%);}
+        .mode-panel{display:none;}
+        .mode-panel.active{display:block;}
+        .section-label{font-family:'Oswald',sans-serif;font-size:0.7rem;font-weight:600;letter-spacing:5px;color:var(--orange);text-transform:uppercase;margin-bottom:6px;}
+        .section-heading{font-family:'Oswald',sans-serif;font-size:1.4rem;font-weight:700;color:var(--blue-primary);text-transform:uppercase;letter-spacing:2px;margin-bottom:28px;}
+        .cards-row{display:flex;gap:20px;flex-wrap:wrap;}
+        .drop-card{flex:1;min-width:240px;border:2px solid var(--blue-light);padding:28px 24px;position:relative;transition:all 0.22s;background:var(--bg);}
+        .drop-card::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;background:var(--blue-light);transition:background 0.22s;}
+        .drop-card:hover{border-color:var(--blue-primary);}
+        .drop-card:hover::before{background:var(--blue-primary);}
+        .drop-card.has-file{border-color:var(--orange);}
+        .drop-card.has-file::before{background:var(--orange);}
+        .drop-card.email-ok{border-color:var(--green);}
+        .drop-card.email-ok::before{background:var(--green);}
+        .card-icon-row{display:flex;align-items:center;gap:14px;margin-bottom:16px;}
+        .card-picto{width:44px;height:44px;background:var(--blue-light);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+        .card-picto svg{width:20px;height:20px;color:var(--blue-primary);}
+        .card-picto.orange{background:rgba(252,97,0,0.12);}
+        .card-picto.orange svg{color:var(--orange);}
+        .card-picto.gmail{background:rgba(220,53,69,0.10);}
+        .card-picto.gmail svg{color:#DC3545;}
+        .card-name{font-family:'Oswald',sans-serif;font-size:1rem;font-weight:600;color:var(--blue-primary);text-transform:uppercase;letter-spacing:1px;}
+        .card-sub{font-size:0.78rem;color:#5A6A8A;margin-top:2px;}
+        .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 22px;font-family:'Oswald',sans-serif;font-size:0.82rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;border:2px solid;cursor:pointer;transition:all 0.2s;}
+        .btn svg{width:14px;height:14px;}
+        .btn-navy{background:var(--blue-primary);color:var(--white);border-color:var(--blue-primary);}
+        .btn-navy:hover{background:transparent;color:var(--blue-primary);}
+        .btn-orange{background:var(--orange);color:var(--white);border-color:var(--orange);}
+        .btn-orange:hover{background:transparent;color:var(--orange);}
+        .btn-red{background:#DC3545;color:var(--white);border-color:#DC3545;}
+        .btn-red:hover{background:transparent;color:#DC3545;}
+        .drag-note{font-size:0.73rem;color:#8A9AB5;margin-top:8px;font-style:italic;}
+        .file-chip{display:none;margin-top:14px;padding:10px 14px;background:var(--white);border-left:3px solid var(--orange);border-top:1px solid var(--blue-light);border-right:1px solid var(--blue-light);border-bottom:1px solid var(--blue-light);}
+        .file-chip.visible{display:block;}
+        .chip-name{font-family:'Oswald',sans-serif;font-size:0.85rem;font-weight:500;color:var(--blue-primary);word-break:break-all;}
+        .chip-size{font-size:0.72rem;color:#8A9AB5;margin-top:2px;}
+        .chip-remove{margin-top:8px;background:transparent;border:1px solid var(--orange);color:var(--orange);padding:2px 10px;font-size:0.7rem;font-family:'Oswald',sans-serif;letter-spacing:1px;cursor:pointer;transition:all 0.15s;}
+        .chip-remove:hover{background:var(--orange);color:var(--white);}
+        .gmail-connected-msg{display:none;margin-top:12px;padding:10px 14px;background:rgba(0,104,94,0.08);border-left:3px solid var(--green);font-size:0.82rem;color:var(--green);font-weight:500;flex-direction:row;align-items:center;gap:10px;}
+        .gmail-connected-msg.visible{display:flex;}
+        .btn-disconnect{margin-left:auto;background:transparent;border:1px solid var(--green);color:var(--green);padding:2px 10px;font-size:0.7rem;cursor:pointer;font-family:'Oswald',sans-serif;letter-spacing:1px;transition:all 0.15s;}
+        .btn-disconnect:hover{background:var(--green);color:var(--white);}
+        .label-field{margin-top:14px;display:none;}
+        .label-field label{display:block;font-family:'Oswald',sans-serif;font-size:0.7rem;letter-spacing:3px;color:var(--blue-primary);text-transform:uppercase;margin-bottom:6px;}
+        .label-field input{width:100%;padding:9px 12px;border:2px solid var(--blue-light);background:var(--white);color:var(--blue-primary);font-family:'Roboto',sans-serif;font-size:0.88rem;transition:border-color 0.2s;}
+        .label-field input:focus{outline:none;border-color:var(--blue-primary);}
+        .action-band{background:var(--blue-primary);padding:24px 48px;display:flex;align-items:center;gap:24px;border-top:3px solid var(--orange);}
+        .action-band-label{font-family:'Oswald',sans-serif;font-size:0.7rem;letter-spacing:4px;color:var(--blue-medium);text-transform:uppercase;}
+        .btn-launch{display:inline-flex;align-items:center;gap:14px;padding:16px 48px;background:var(--orange);color:var(--white);border:2px solid var(--orange);font-family:'Oswald',sans-serif;font-size:1rem;font-weight:600;letter-spacing:4px;text-transform:uppercase;cursor:pointer;transition:all 0.25s;position:relative;overflow:hidden;}
+        .btn-launch svg{width:18px;height:18px;flex-shrink:0;}
+        .btn-launch::after{content:'';position:absolute;inset:0;background:var(--white);transform:scaleX(0);transform-origin:right;transition:transform 0.25s;}
+        .btn-launch>*{position:relative;z-index:1;}
+        .btn-launch:not(:disabled):hover{color:var(--orange);border-color:var(--orange);}
+        .btn-launch:not(:disabled):hover::after{transform:scaleX(1);}
+        .btn-launch:disabled{background:rgba(152,178,221,0.2);border-color:rgba(152,178,221,0.3);color:rgba(152,178,221,0.5);cursor:not-allowed;}
+        .btn-launch.batch{background:var(--blue-dark);border-color:var(--blue-dark);}
+        .btn-launch.batch:not(:disabled):hover{color:var(--blue-dark);}
+        .btn-launch.email{background:#DC3545;border-color:#DC3545;}
+        .btn-launch.email:not(:disabled):hover{color:#DC3545;}
+        .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,0.4);border-top-color:white;border-radius:50%;animation:spin 0.7s linear infinite;}
+        @keyframes spin{to{transform:rotate(360deg);}}
+        .feedback-zone{background:rgba(255,255,255,0.04);border-top:1px solid rgba(152,178,221,0.15);padding:28px 48px;}
+        .progress-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+        .progress-lbl{font-family:'Oswald',sans-serif;font-size:0.75rem;letter-spacing:3px;color:var(--blue-medium);text-transform:uppercase;}
+        .progress-count{font-size:0.8rem;color:var(--blue-medium);}
+        .progress-track{background:rgba(152,178,221,0.15);height:4px;margin-bottom:8px;}
+        .progress-fill{height:100%;background:var(--orange);transition:width 0.3s;}
+        .progress-file{font-size:0.78rem;color:#8A9AB5;margin-bottom:16px;}
+        .progress-file strong{color:var(--blue-medium);}
+        .status-row{display:flex;align-items:flex-start;gap:16px;padding:16px 0;}
+        .status-ico{width:36px;height:36px;display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0;}
+        .status-row.success .status-ico{color:var(--green);}
+        .status-row.error .status-ico{color:#FC5454;}
+        .status-row.loading .status-ico{color:var(--orange);}
+        .status-title{font-family:'Oswald',sans-serif;font-size:0.9rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px;}
+        .status-row.success .status-title{color:#5CDB9A;}
+        .status-row.error .status-title{color:#FC5454;}
+        .status-row.loading .status-title{color:var(--orange);}
+        .status-msg{font-size:0.82rem;color:#8A9AB5;}
+        .btn-download{display:inline-flex;align-items:center;gap:10px;margin-top:12px;padding:13px 36px;background:var(--green);color:var(--white);border:2px solid var(--green);font-family:'Oswald',sans-serif;font-size:0.85rem;font-weight:600;letter-spacing:3px;text-transform:uppercase;cursor:pointer;transition:all 0.2s;}
+        .btn-download:hover{background:transparent;color:var(--green);}
+        .btn-download svg{width:15px;height:15px;}
+        .footer{position:relative;z-index:10;padding:20px 48px;display:flex;align-items:center;gap:20px;border-top:1px solid rgba(152,178,221,0.1);}
+        .footer-line{flex:1;height:1px;background:rgba(152,178,221,0.1);}
+        .footer-txt{font-family:'Roboto',sans-serif;font-size:0.75rem;color:rgba(152,178,221,0.4);letter-spacing:2px;}
+        .footer-txt strong{font-family:'Oswald',sans-serif;color:rgba(252,97,0,0.7);letter-spacing:3px;}
+        @media(max-width:768px){
+            .header,.hero-body,.panel-white,.action-band,.feedback-zone,.footer{padding-left:20px;padding-right:20px;}
+            .mode-tabs{margin-left:20px;overflow-x:auto;}
+            .hero-title-argos{font-size:3rem;}
+            .cards-row{flex-direction:column;}
+        }
+        [hidden]{display:none !important;}
     </style>
 </head>
 <body>
+    <img src="robot.png" alt="" class="robot-bg">
+    <div class="pattern-overlay"></div>
+    <div class="orange-slash"></div>
 
-    <!-- ─── HEADER ─── -->
-    <header class="site-header">
-        <a href="/" class="site-logo">
-            <!-- Symbole NETEXIAL SVG simplifié -->
-            <svg class="logo-symbol" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="20" cy="9" r="3" stroke="white" stroke-width="1.8"/>
-                <line x1="20" y1="12" x2="20" y2="22" stroke="white" stroke-width="1.8"/>
-                <line x1="20" y1="22" x2="10" y2="34" stroke="white" stroke-width="1.8"/>
-                <line x1="20" y1="22" x2="30" y2="34" stroke="white" stroke-width="1.8"/>
-                <line x1="15" y1="18" x2="25" y2="18" stroke="white" stroke-width="1.8"/>
-                <line x1="8" y1="19" x2="15" y2="18" stroke="white" stroke-width="1.4" opacity="0.5"/>
-                <line x1="32" y1="19" x2="25" y2="18" stroke="white" stroke-width="1.4" opacity="0.5"/>
-                <line x1="7" y1="22" x2="13" y2="21" stroke="white" stroke-width="1.2" opacity="0.3"/>
-                <line x1="33" y1="22" x2="27" y2="21" stroke="white" stroke-width="1.2" opacity="0.3"/>
-            </svg>
-            <span class="logo-wordmark">NETEXIAL</span>
+    <header class="header">
+        <a href="/" class="logo-mark">
+            <span class="logo-symbol">
+                <svg viewBox="0 0 32 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="16" cy="6" r="3.5" stroke="white" stroke-width="1.6"/>
+                    <line x1="16" y1="9.5" x2="16" y2="20" stroke="white" stroke-width="1.6"/>
+                    <line x1="16" y1="20" x2="5" y2="38" stroke="white" stroke-width="1.6"/>
+                    <line x1="16" y1="20" x2="27" y2="38" stroke="white" stroke-width="1.6"/>
+                    <line x1="9" y1="15.5" x2="23" y2="15.5" stroke="white" stroke-width="1.6"/>
+                    <line x1="4" y1="17" x2="9" y2="15.5" stroke="white" stroke-width="1.2" opacity="0.45"/>
+                    <line x1="28" y1="17" x2="23" y2="15.5" stroke="white" stroke-width="1.2" opacity="0.45"/>
+                </svg>
+            </span>
+            <span class="logo-name">NETEXIAL</span>
         </a>
-        <div class="header-divider"></div>
-        <span class="header-product">ARGOS</span>
-        <span class="header-badge">Extraction IA</span>
+        <div class="header-sep"></div>
+        <span class="header-dept">Extraction intelligente</span>
+        <div class="header-pill">Outil interne</div>
     </header>
 
-    <!-- ─── HERO ─── -->
-    <section class="hero">
-        <div class="hero-inner">
-            <div class="hero-tag">Outil interne</div>
-            <h1 class="hero-title">ARGOS</h1>
-            <div class="hero-line"></div>
-            <p class="hero-subtitle">Extraction intelligente de données structurées. Parce que la précision est non négociable.</p>
+    <div class="hero-body">
+        <div class="hero-tag">Système d'extraction de données</div>
+        <div class="hero-title-argos">
+            <span class="argos-letter">A</span><span class="argos-letter">R</span><span class="argos-letter">G</span><span class="argos-letter">O</span><span class="argos-letter">S</span>
         </div>
-    </section>
+        <div class="hero-divider">
+            <div class="hero-divider-line"></div>
+            <span class="hero-divider-text">Parce que la précision est non négociable</span>
+        </div>
+        <p class="hero-subtitle">Analysez vos documents, extrayez vos données structurées et exportez vers vos templates XML en quelques secondes.</p>
+    </div>
 
-    <!-- ─── MODE TABS ─── -->
-    <nav class="mode-nav">
-        <div class="mode-nav-inner">
+    <div class="panel-container">
+        <div class="mode-tabs">
             <button class="mode-tab active" onclick="switchMode('single')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 Fichier unique
@@ -684,490 +183,158 @@
             </button>
             <button class="mode-tab" onclick="switchMode('email')">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                Mode email
+                Gmail
             </button>
         </div>
-    </nav>
 
-    <!-- ─── MAIN ─── -->
-    <main class="main">
-
-        <!-- SINGLE MODE -->
-        <div class="mode-panel active" id="singleMode">
-            <div class="section-header">
-                <div class="section-label">Étape 1 — Documents</div>
-                <h2 class="section-title">Téléverser les fichiers</h2>
-            </div>
-            <div class="upload-grid">
-                <!-- Document source -->
-                <div class="upload-card" id="sourceDropZone">
-                    <div class="card-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+        <div class="panel-white">
+            <div class="mode-panel active" id="singleMode">
+                <div class="section-label">Étape 01 — Documents</div>
+                <div class="section-heading">Téléverser les fichiers</div>
+                <div class="cards-row">
+                    <div class="drop-card" id="sourceDropZone">
+                        <div class="card-icon-row">
+                            <div class="card-picto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></div>
+                            <div><div class="card-name">Document source</div><div class="card-sub">PDF · Image · Word · Texte</div></div>
+                        </div>
+                        <input type="file" id="sourceFile" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" hidden>
+                        <button class="btn btn-navy" onclick="document.getElementById('sourceFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
+                        <div class="drag-note">ou glisser-déposer ici</div>
+                        <div class="file-chip" id="sourceFileInfo"></div>
                     </div>
-                    <div class="card-title">Document source</div>
-                    <div class="card-desc">PDF, Image, Word, Texte</div>
-                    <input type="file" id="sourceFile" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" hidden>
-                    <button class="btn-upload" onclick="document.getElementById('sourceFile').click()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Parcourir
-                    </button>
-                    <div class="drag-hint">ou glisser-déposer le fichier ici</div>
-                    <div class="file-info" id="sourceFileInfo"></div>
-                </div>
-                <!-- Template XML -->
-                <div class="upload-card" id="templateDropZone">
-                    <div class="card-icon orange-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                    <div class="drop-card" id="templateDropZone">
+                        <div class="card-icon-row">
+                            <div class="card-picto orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+                            <div><div class="card-name">Template XML</div><div class="card-sub">Structure NETEXIAL</div></div>
+                        </div>
+                        <input type="file" id="templateFile" accept=".xml" hidden>
+                        <button class="btn btn-orange" onclick="document.getElementById('templateFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
+                        <div class="drag-note">ou glisser-déposer ici</div>
+                        <div class="file-chip" id="templateFileInfo"></div>
                     </div>
-                    <div class="card-title">Template XML</div>
-                    <div class="card-desc">Structure de données NETEXIAL</div>
-                    <input type="file" id="templateFile" accept=".xml" hidden>
-                    <button class="btn-upload orange" onclick="document.getElementById('templateFile').click()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Parcourir
-                    </button>
-                    <div class="drag-hint">ou glisser-déposer le fichier ici</div>
-                    <div class="file-info" id="templateFileInfo"></div>
                 </div>
             </div>
-            <div class="action-row">
-                <button class="btn-analyze" id="analyzeBtn" disabled>
-                    <span class="btn-content" style="display:flex;align-items:center;gap:12px;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
-                        Lancer l'analyse
-                    </span>
-                    <span class="btn-loader" hidden style="display:flex;align-items:center;gap:10px;">
-                        <span class="spinner"></span> Traitement en cours…
-                    </span>
-                </button>
-            </div>
-        </div>
 
-        <!-- BATCH MODE -->
-        <div class="mode-panel" id="batchMode">
-            <div class="section-header">
+            <div class="mode-panel" id="batchMode">
                 <div class="section-label">Traitement en série</div>
-                <h2 class="section-title">Mode batch</h2>
-            </div>
-            <div class="upload-grid">
-                <div class="upload-card" id="batchSourceDropZone">
-                    <div class="card-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <div class="section-heading">Mode batch</div>
+                <div class="cards-row">
+                    <div class="drop-card" id="batchSourceDropZone">
+                        <div class="card-icon-row">
+                            <div class="card-picto"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+                            <div><div class="card-name">Documents sources</div><div class="card-sub">Sélection multiple</div></div>
+                        </div>
+                        <input type="file" id="batchSourceFiles" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" multiple hidden>
+                        <button class="btn btn-navy" onclick="document.getElementById('batchSourceFiles').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
+                        <div class="drag-note">ou glisser-déposer ici</div>
+                        <div class="file-chip" id="batchSourceFileInfo"></div>
                     </div>
-                    <div class="card-title">Documents sources</div>
-                    <div class="card-desc">Sélectionnez plusieurs fichiers à traiter simultanément</div>
-                    <input type="file" id="batchSourceFiles" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" multiple hidden>
-                    <button class="btn-upload" onclick="document.getElementById('batchSourceFiles').click()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Parcourir
-                    </button>
-                    <div class="drag-hint">ou glisser-déposer les fichiers ici</div>
-                    <div class="file-info blue-info" id="batchSourceFileInfo"></div>
-                </div>
-                <div class="upload-card" id="batchTemplateDropZone">
-                    <div class="card-icon orange-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-                    </div>
-                    <div class="card-title">Template XML</div>
-                    <div class="card-desc">Un seul template appliqué à tous les documents</div>
-                    <input type="file" id="batchTemplateFile" accept=".xml" hidden>
-                    <button class="btn-upload orange" onclick="document.getElementById('batchTemplateFile').click()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Parcourir
-                    </button>
-                    <div class="drag-hint">ou glisser-déposer le fichier ici</div>
-                    <div class="file-info" id="batchTemplateFileInfo"></div>
-                </div>
-            </div>
-            <div class="action-row">
-                <button class="btn-analyze batch-btn" id="batchAnalyzeBtn" disabled>
-                    <span class="btn-content" style="display:flex;align-items:center;gap:12px;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><rect x="16" y="2" width="6" height="6" rx="1"/><rect x="2" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
-                        Lancer le batch
-                    </span>
-                    <span class="btn-loader" hidden style="display:flex;align-items:center;gap:10px;">
-                        <span class="spinner"></span> Traitement en cours…
-                    </span>
-                </button>
-            </div>
-        </div>
-
-        <!-- EMAIL MODE -->
-        <div class="mode-panel" id="emailMode">
-            <div class="section-header">
-                <div class="section-label">Extraction Gmail</div>
-                <h2 class="section-title">Mode email</h2>
-            </div>
-            <div class="upload-grid">
-                <div class="upload-card" id="gmailCard">
-                    <div class="card-icon red-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                    </div>
-                    <div class="card-title">Connexion Gmail</div>
-                    <div class="card-desc">Connectez votre compte Google pour accéder aux emails du label ARGOS</div>
-                    <button class="btn-upload" id="gmailConnectBtn" onclick="connectGmail()" style="background:#DC3545;border-color:#DC3545;gap:10px;">
-                        <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
-                        <span id="gmailBtnText">Se connecter avec Google</span>
-                    </button>
-                    <div class="gmail-status" id="gmailStatus">
-                        <span>✓ Compte connecté</span>
-                        <button class="disconnect-btn" onclick="disconnectGmail()">Déconnecter</button>
-                    </div>
-                    <div class="label-input" id="labelInput">
-                        <label>Libellé Gmail à traiter</label>
-                        <input type="text" id="gmailLabel" value="ARGOS" placeholder="ex : ARGOS">
+                    <div class="drop-card" id="batchTemplateDropZone">
+                        <div class="card-icon-row">
+                            <div class="card-picto orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+                            <div><div class="card-name">Template XML</div><div class="card-sub">Un template pour tous</div></div>
+                        </div>
+                        <input type="file" id="batchTemplateFile" accept=".xml" hidden>
+                        <button class="btn btn-orange" onclick="document.getElementById('batchTemplateFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
+                        <div class="drag-note">ou glisser-déposer ici</div>
+                        <div class="file-chip" id="batchTemplateFileInfo"></div>
                     </div>
                 </div>
-                <div class="upload-card" id="emailTemplateDropZone">
-                    <div class="card-icon orange-icon">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            </div>
+
+            <div class="mode-panel" id="emailMode">
+                <div class="section-label">Extraction automatique</div>
+                <div class="section-heading">Mode Gmail</div>
+                <div class="cards-row">
+                    <div class="drop-card" id="gmailCard">
+                        <div class="card-icon-row">
+                            <div class="card-picto gmail"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg></div>
+                            <div><div class="card-name">Connexion Gmail</div><div class="card-sub">OAuth Google sécurisé</div></div>
+                        </div>
+                        <button class="btn btn-red" id="gmailConnectBtn" onclick="connectGmail()" style="gap:10px">
+                            <svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                            <span id="gmailBtnText">Se connecter</span>
+                        </button>
+                        <div class="gmail-connected-msg" id="gmailStatus"><span>✓ Compte connecté</span><button class="btn-disconnect" onclick="disconnectGmail()">Déconnecter</button></div>
+                        <div class="label-field" id="labelInput"><label>Libellé Gmail</label><input type="text" id="gmailLabel" value="ARGOS" placeholder="ex : ARGOS"></div>
                     </div>
-                    <div class="card-title">Template XML</div>
-                    <div class="card-desc">Structure de données pour les emails extraits</div>
-                    <input type="file" id="emailTemplateFile" accept=".xml" hidden>
-                    <button class="btn-upload orange" onclick="document.getElementById('emailTemplateFile').click()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                        Parcourir
-                    </button>
-                    <div class="drag-hint">ou glisser-déposer le fichier ici</div>
-                    <div class="file-info" id="emailTemplateFileInfo"></div>
+                    <div class="drop-card" id="emailTemplateDropZone">
+                        <div class="card-icon-row">
+                            <div class="card-picto orange"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></div>
+                            <div><div class="card-name">Template XML</div><div class="card-sub">Structure pour les emails</div></div>
+                        </div>
+                        <input type="file" id="emailTemplateFile" accept=".xml" hidden>
+                        <button class="btn btn-orange" onclick="document.getElementById('emailTemplateFile').click()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Parcourir</button>
+                        <div class="drag-note">ou glisser-déposer ici</div>
+                        <div class="file-chip" id="emailTemplateFileInfo"></div>
+                    </div>
                 </div>
             </div>
-            <div class="action-row">
-                <button class="btn-analyze" id="emailAnalyzeBtn" disabled style="background:#DC3545;border-color:#DC3545;">
-                    <span class="btn-content" style="display:flex;align-items:center;gap:12px;">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
-                        Analyser les emails
-                    </span>
-                    <span class="btn-loader" hidden style="display:flex;align-items:center;gap:10px;">
-                        <span class="spinner"></span> Analyse en cours…
-                    </span>
-                </button>
-            </div>
         </div>
 
-        <!-- ─── PROGRESS ─── -->
-        <div class="progress-section" id="progressSection" hidden>
-            <div class="progress-header">
-                <div class="progress-title">Progression</div>
-                <div class="progress-count" id="progressCount">0 / 0</div>
-            </div>
-            <div class="progress-track">
-                <div class="progress-fill" id="progressBar" style="width:0%"></div>
-            </div>
-            <div class="progress-current">Fichier en cours : <strong id="currentFileName">—</strong></div>
+        <div class="action-band">
+            <span class="action-band-label">Étape 02 — Lancer</span>
+            <button class="btn-launch" id="analyzeBtn" disabled>
+                <span class="btn-c" style="display:flex;align-items:center;gap:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>Lancer l'analyse</span>
+                <span class="btn-l" hidden style="display:flex;align-items:center;gap:10px"><span class="spinner"></span>Traitement…</span>
+            </button>
+            <button class="btn-launch batch" id="batchAnalyzeBtn" disabled hidden>
+                <span class="btn-c" style="display:flex;align-items:center;gap:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/></svg>Lancer le batch</span>
+                <span class="btn-l" hidden style="display:flex;align-items:center;gap:10px"><span class="spinner"></span>Traitement…</span>
+            </button>
+            <button class="btn-launch email" id="emailAnalyzeBtn" disabled hidden>
+                <span class="btn-c" style="display:flex;align-items:center;gap:12px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>Analyser les emails</span>
+                <span class="btn-l" hidden style="display:flex;align-items:center;gap:10px"><span class="spinner"></span>Analyse…</span>
+            </button>
         </div>
 
-        <!-- ─── RESULT ─── -->
-        <div id="resultSection" hidden>
-            <div class="status-card" id="statusCard"></div>
-            <div class="download-row" id="downloadSection" hidden>
-                <button class="btn-download" id="downloadBtn">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                    <span id="downloadBtnText">Télécharger le fichier</span>
-                </button>
+        <div class="feedback-zone" id="feedbackZone" hidden>
+            <div id="progressSection" hidden>
+                <div class="progress-row"><span class="progress-lbl">Progression</span><span class="progress-count" id="progressCount">0 / 0</span></div>
+                <div class="progress-track"><div class="progress-fill" id="progressBar" style="width:0%"></div></div>
+                <div class="progress-file">En cours : <strong id="currentFileName">—</strong></div>
+            </div>
+            <div class="status-row" id="statusCard" hidden></div>
+            <div id="downloadSection" hidden>
+                <button class="btn-download" id="downloadBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span id="downloadBtnText">Télécharger</span></button>
             </div>
         </div>
+    </div>
 
-    </main>
-
-    <!-- ─── FOOTER ─── -->
-    <footer class="site-footer">
-        <div class="footer-inner">
-            <div class="footer-line"></div>
-            <p class="footer-text">Propulsé par <strong>ARGOS</strong> · NETEXIAL © 2025</p>
-            <div class="footer-line"></div>
-        </div>
+    <footer class="footer">
+        <div class="footer-line"></div>
+        <span class="footer-txt">Propulsé par <strong>ARGOS</strong> · NETEXIAL 2025</span>
+        <div class="footer-line"></div>
     </footer>
 
-    <script>
-        const state = {
-            mode: 'single',
-            sourceFile: null, templateFile: null,
-            batchSourceFiles: [], batchTemplateFile: null,
-            emailTemplateFile: null,
-            gmailConnected: false,
-            isProcessing: false,
-            resultBlob: null
-        };
-        const $ = id => document.getElementById(id);
-
-        document.addEventListener('DOMContentLoaded', () => {
-            initDragDrop();
-            initFileInputs();
-            initButtons();
-            checkGmailAuth();
-            checkGmailStatus();
-        });
-
-        function switchMode(mode) {
-            state.mode = mode;
-            document.querySelectorAll('.mode-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.mode-panel').forEach(p => p.classList.remove('active'));
-            const tabMap = { single: 0, batch: 1, email: 2 };
-            document.querySelectorAll('.mode-tab')[tabMap[mode]].classList.add('active');
-            $(`${mode}Mode`).classList.add('active');
-            $('resultSection').hidden = true;
-            $('downloadSection').hidden = true;
-            $('progressSection').hidden = true;
-        }
-
-        function initDragDrop() {
-            setupDrop($('sourceDropZone'), f => handleFile('source', f));
-            setupDrop($('templateDropZone'), f => handleFile('template', f));
-            setupDropMulti($('batchSourceDropZone'), files => handleBatchFiles(files));
-            setupDrop($('batchTemplateDropZone'), f => handleBatchTemplate(f));
-            setupDrop($('emailTemplateDropZone'), f => handleEmailTemplate(f));
-        }
-
-        function setupDrop(zone, cb) {
-            ['dragenter','dragover','dragleave','drop'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); }));
-            ['dragenter','dragover'].forEach(e => zone.addEventListener(e, () => zone.style.borderColor = 'var(--orange)'));
-            ['dragleave','drop'].forEach(e => zone.addEventListener(e, () => zone.style.borderColor = ''));
-            zone.addEventListener('drop', e => { if (e.dataTransfer.files[0]) cb(e.dataTransfer.files[0]); });
-        }
-
-        function setupDropMulti(zone, cb) {
-            ['dragenter','dragover','dragleave','drop'].forEach(e => zone.addEventListener(e, ev => { ev.preventDefault(); ev.stopPropagation(); }));
-            ['dragenter','dragover'].forEach(e => zone.addEventListener(e, () => zone.style.borderColor = 'var(--blue-primary)'));
-            ['dragleave','drop'].forEach(e => zone.addEventListener(e, () => zone.style.borderColor = ''));
-            zone.addEventListener('drop', e => cb(Array.from(e.dataTransfer.files)));
-        }
-
-        function initFileInputs() {
-            $('sourceFile').addEventListener('change', e => { if (e.target.files[0]) handleFile('source', e.target.files[0]); });
-            $('templateFile').addEventListener('change', e => { if (e.target.files[0]) handleFile('template', e.target.files[0]); });
-            $('batchSourceFiles').addEventListener('change', e => handleBatchFiles(Array.from(e.target.files)));
-            $('batchTemplateFile').addEventListener('change', e => { if (e.target.files[0]) handleBatchTemplate(e.target.files[0]); });
-            $('emailTemplateFile').addEventListener('change', e => { if (e.target.files[0]) handleEmailTemplate(e.target.files[0]); });
-        }
-
-        function handleFile(type, file) {
-            state[type + 'File'] = file;
-            const info = $(`${type}FileInfo`);
-            const zone = $(`${type}DropZone`);
-            info.innerHTML = `<div class="file-name">📄 ${file.name}</div><div class="file-size">${formatSize(file.size)}</div><button class="remove-file">✕ Retirer</button>`;
-            info.classList.add('visible');
-            zone.classList.add('has-file');
-            info.querySelector('.remove-file').onclick = () => {
-                state[type + 'File'] = null;
-                info.classList.remove('visible');
-                zone.classList.remove('has-file');
-                updateBtn();
-            };
-            updateBtn();
-        }
-
-        function handleBatchFiles(files) {
-            state.batchSourceFiles = [...state.batchSourceFiles, ...files];
-            const info = $('batchSourceFileInfo');
-            const zone = $('batchSourceDropZone');
-            if (!state.batchSourceFiles.length) { info.classList.remove('visible'); zone.classList.remove('has-file'); return; }
-            info.innerHTML = `<div class="file-name">📁 ${state.batchSourceFiles.length} fichier(s) sélectionné(s)</div><div class="file-size">${formatSize(state.batchSourceFiles.reduce((s,f) => s+f.size, 0))}</div><button class="remove-file">✕ Tout retirer</button>`;
-            info.classList.add('visible'); zone.classList.add('has-file');
-            info.querySelector('.remove-file').onclick = () => {
-                state.batchSourceFiles = [];
-                info.classList.remove('visible'); zone.classList.remove('has-file'); updateBtn();
-            };
-            updateBtn();
-        }
-
-        function handleBatchTemplate(file) {
-            state.batchTemplateFile = file;
-            const info = $('batchTemplateFileInfo'), zone = $('batchTemplateDropZone');
-            info.innerHTML = `<div class="file-name">📄 ${file.name}</div><div class="file-size">${formatSize(file.size)}</div><button class="remove-file">✕ Retirer</button>`;
-            info.classList.add('visible'); zone.classList.add('has-file');
-            info.querySelector('.remove-file').onclick = () => { state.batchTemplateFile = null; info.classList.remove('visible'); zone.classList.remove('has-file'); updateBtn(); };
-            updateBtn();
-        }
-
-        function handleEmailTemplate(file) {
-            state.emailTemplateFile = file;
-            const info = $('emailTemplateFileInfo'), zone = $('emailTemplateDropZone');
-            info.innerHTML = `<div class="file-name">📄 ${file.name}</div><div class="file-size">${formatSize(file.size)}</div><button class="remove-file">✕ Retirer</button>`;
-            info.classList.add('visible'); zone.classList.add('has-file');
-            info.querySelector('.remove-file').onclick = () => { state.emailTemplateFile = null; info.classList.remove('visible'); zone.classList.remove('has-file'); updateBtn(); };
-            updateBtn();
-        }
-
-        function formatSize(b) {
-            if (b < 1024) return b + ' o';
-            if (b < 1048576) return (b/1024).toFixed(1) + ' Ko';
-            return (b/1048576).toFixed(1) + ' Mo';
-        }
-
-        function updateBtn() {
-            $('analyzeBtn').disabled = !(state.sourceFile && state.templateFile && !state.isProcessing);
-            $('batchAnalyzeBtn').disabled = !(state.batchSourceFiles.length > 0 && state.batchTemplateFile && !state.isProcessing);
-            $('emailAnalyzeBtn').disabled = !(state.gmailConnected && state.emailTemplateFile && !state.isProcessing);
-        }
-
-        function initButtons() {
-            $('analyzeBtn').onclick = startAnalysis;
-            $('batchAnalyzeBtn').onclick = startBatchAnalysis;
-            $('emailAnalyzeBtn').onclick = startEmailAnalysis;
-            $('downloadBtn').onclick = downloadResult;
-        }
-
-        function setLoading(btn, loading) {
-            btn.querySelector('.btn-content').hidden = loading;
-            btn.querySelector('.btn-loader').hidden = !loading;
-        }
-
-        async function startAnalysis() {
-            if (!state.sourceFile || !state.templateFile || state.isProcessing) return;
-            state.isProcessing = true; setLoading($('analyzeBtn'), true); updateBtn();
-            showStatus('loading', 'Analyse en cours', 'ARGOS extrait les données du document…');
-            try {
-                const fd = new FormData();
-                fd.append('source', state.sourceFile); fd.append('template', state.templateFile);
-                const res = await fetch('/api/extract', { method: 'POST', body: fd });
-                if (!res.ok) throw new Error('Erreur serveur');
-                state.resultBlob = await res.blob();
-                showStatus('success', 'Analyse terminée', 'Votre fichier XML est prêt au téléchargement.');
-                $('downloadBtnText').textContent = 'Télécharger le XML';
-                $('downloadSection').hidden = false;
-            } catch(e) {
-                showStatus('error', 'Échec de l\'analyse', e.message);
-            } finally {
-                state.isProcessing = false; setLoading($('analyzeBtn'), false); updateBtn();
-            }
-        }
-
-        async function startBatchAnalysis() {
-            if (!state.batchSourceFiles.length || !state.batchTemplateFile || state.isProcessing) return;
-            state.isProcessing = true; setLoading($('batchAnalyzeBtn'), true); updateBtn();
-            $('progressSection').hidden = false;
-            updateProgress(0, state.batchSourceFiles.length, 'Préparation…');
-            showStatus('loading', 'Traitement batch', `${state.batchSourceFiles.length} fichier(s) en cours de traitement…`);
-            try {
-                const fd = new FormData();
-                fd.append('template', state.batchTemplateFile);
-                state.batchSourceFiles.forEach(f => fd.append('sources', f));
-                let prog = 0;
-                const interval = setInterval(() => {
-                    if (prog < state.batchSourceFiles.length - 1) {
-                        prog++;
-                        updateProgress(prog, state.batchSourceFiles.length, state.batchSourceFiles[prog]?.name || '…');
-                    }
-                }, 2000);
-                const res = await fetch('/api/extract-batch', { method: 'POST', body: fd });
-                clearInterval(interval);
-                if (!res.ok) throw new Error('Erreur serveur');
-                state.resultBlob = await res.blob();
-                updateProgress(state.batchSourceFiles.length, state.batchSourceFiles.length, 'Terminé');
-                showStatus('success', 'Batch terminé', `${state.batchSourceFiles.length} fichier(s) traité(s) avec succès.`);
-                $('downloadBtnText').textContent = 'Télécharger le ZIP';
-                $('downloadSection').hidden = false;
-            } catch(e) {
-                showStatus('error', 'Échec du batch', e.message);
-            } finally {
-                state.isProcessing = false; setLoading($('batchAnalyzeBtn'), false); updateBtn();
-            }
-        }
-
-        async function startEmailAnalysis() {
-            if (!state.gmailConnected || !state.emailTemplateFile || state.isProcessing) return;
-            state.isProcessing = true; setLoading($('emailAnalyzeBtn'), true); updateBtn();
-            $('progressSection').hidden = false;
-            updateProgress(0, 1, 'Connexion à Gmail…');
-            showStatus('loading', 'Analyse des emails', 'Récupération des emails du label sélectionné…');
-            try {
-                const fd = new FormData();
-                fd.append('template', state.emailTemplateFile);
-                fd.append('label', $('gmailLabel').value || 'ARGOS');
-                const res = await fetch('/api/extract-emails', { method: 'POST', body: fd, credentials: 'include' });
-                if (!res.ok) { const err = await res.json(); throw new Error(err.error || 'Erreur serveur'); }
-                state.resultBlob = await res.blob();
-                updateProgress(1, 1, 'Terminé');
-                showStatus('success', 'Emails traités', 'L\'extraction de tous les emails est terminée.');
-                $('downloadBtnText').textContent = 'Télécharger le ZIP';
-                $('downloadSection').hidden = false;
-            } catch(e) {
-                showStatus('error', 'Échec', e.message);
-            } finally {
-                state.isProcessing = false; setLoading($('emailAnalyzeBtn'), false); updateBtn();
-            }
-        }
-
-        function updateProgress(current, total, filename) {
-            $('progressBar').style.width = (current / total * 100) + '%';
-            $('progressCount').textContent = `${current} / ${total}`;
-            $('currentFileName').textContent = filename;
-        }
-
-        function showStatus(type, title, msg) {
-            $('resultSection').hidden = false;
-            const icons = { success: '✓', error: '✕', loading: '<div class="spinner" style="border-color:rgba(252,97,0,.3);border-top-color:var(--orange)"></div>' };
-            $('statusCard').className = 'status-card ' + type;
-            $('statusCard').innerHTML = `<div class="status-icon">${icons[type]}</div><div><div class="status-title">${title}</div><div class="status-msg">${msg}</div></div>`;
-        }
-
-        function downloadResult() {
-            if (!state.resultBlob) return;
-            const url = URL.createObjectURL(state.resultBlob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = state.mode === 'single' ? `argos_${Date.now()}.xml` : `argos_${state.mode}_${Date.now()}.zip`;
-            a.click();
-            URL.revokeObjectURL(url);
-        }
-
-        function checkGmailAuth() {
-            const params = new URLSearchParams(window.location.search);
-            if (params.get('gmail_auth') === 'success') {
-                state.gmailConnected = true; updateGmailUI(true);
-                window.history.replaceState({}, '', '/');
-            } else if (params.get('gmail_auth') === 'error') {
-                showStatus('error', 'Échec de connexion', 'Impossible de se connecter à Gmail.');
-                window.history.replaceState({}, '', '/');
-            }
-        }
-
-        async function checkGmailStatus() {
-            try {
-                const res = await fetch('/api/gmail/status', { credentials: 'include' });
-                const data = await res.json();
-                state.gmailConnected = data.connected;
-                updateGmailUI(data.connected);
-            } catch(e) { console.error(e); }
-        }
-
-        async function connectGmail() {
-            try {
-                const res = await fetch('/api/gmail/auth', { credentials: 'include' });
-                const data = await res.json();
-                if (data.auth_url) window.location.href = data.auth_url;
-                else showStatus('error', 'Erreur', data.error || 'Impossible de démarrer OAuth');
-            } catch(e) { showStatus('error', 'Erreur', 'Échec de connexion Gmail'); }
-        }
-
-        async function disconnectGmail() {
-            try {
-                await fetch('/api/gmail/disconnect', { credentials: 'include' });
-                state.gmailConnected = false; updateGmailUI(false);
-            } catch(e) { console.error(e); }
-        }
-
-        function updateGmailUI(connected) {
-            const card = $('gmailCard'), btn = $('gmailConnectBtn'), status = $('gmailStatus'), label = $('labelInput');
-            if (connected) {
-                card.classList.add('email-connected');
-                btn.style.background = 'var(--green-rse)';
-                btn.style.borderColor = 'var(--green-rse)';
-                $('gmailBtnText').textContent = 'Connecté';
-                status.classList.add('visible');
-                label.style.display = 'block';
-            } else {
-                card.classList.remove('email-connected');
-                btn.style.background = '#DC3545';
-                btn.style.borderColor = '#DC3545';
-                $('gmailBtnText').textContent = 'Se connecter avec Google';
-                status.classList.remove('visible');
-                label.style.display = 'none';
-            }
-            updateBtn();
-        }
-    </script>
+<script>
+const state={mode:'single',sourceFile:null,templateFile:null,batchSourceFiles:[],batchTemplateFile:null,emailTemplateFile:null,gmailConnected:false,isProcessing:false,resultBlob:null};
+const $=id=>document.getElementById(id);
+document.addEventListener('DOMContentLoaded',()=>{initDragDrop();initFileInputs();initButtons();checkGmailAuth();checkGmailStatus();});
+function switchMode(mode){state.mode=mode;document.querySelectorAll('.mode-tab').forEach(t=>t.classList.remove('active'));document.querySelectorAll('.mode-panel').forEach(p=>p.classList.remove('active'));const map={single:0,batch:1,email:2};document.querySelectorAll('.mode-tab')[map[mode]].classList.add('active');$(`${mode}Mode`).classList.add('active');$('analyzeBtn').hidden=mode!=='single';$('batchAnalyzeBtn').hidden=mode!=='batch';$('emailAnalyzeBtn').hidden=mode!=='email';$('feedbackZone').hidden=true;}
+function initDragDrop(){setupDrop($('sourceDropZone'),f=>handleFile('source',f));setupDrop($('templateDropZone'),f=>handleFile('template',f));setupDropMulti($('batchSourceDropZone'),files=>handleBatchFiles(files));setupDrop($('batchTemplateDropZone'),f=>handleBatchTemplate(f));setupDrop($('emailTemplateDropZone'),f=>handleEmailTemplate(f));}
+function setupDrop(z,cb){['dragenter','dragover','dragleave','drop'].forEach(e=>z.addEventListener(e,ev=>{ev.preventDefault();ev.stopPropagation();}));['dragenter','dragover'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor='var(--orange)'));['dragleave','drop'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor=''));z.addEventListener('drop',e=>{if(e.dataTransfer.files[0])cb(e.dataTransfer.files[0]);});}
+function setupDropMulti(z,cb){['dragenter','dragover','dragleave','drop'].forEach(e=>z.addEventListener(e,ev=>{ev.preventDefault();ev.stopPropagation();}));['dragenter','dragover'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor='var(--blue-primary)'));['dragleave','drop'].forEach(e=>z.addEventListener(e,()=>z.style.borderColor=''));z.addEventListener('drop',e=>cb(Array.from(e.dataTransfer.files)));}
+function initFileInputs(){$('sourceFile').addEventListener('change',e=>{if(e.target.files[0])handleFile('source',e.target.files[0]);});$('templateFile').addEventListener('change',e=>{if(e.target.files[0])handleFile('template',e.target.files[0]);});$('batchSourceFiles').addEventListener('change',e=>handleBatchFiles(Array.from(e.target.files)));$('batchTemplateFile').addEventListener('change',e=>{if(e.target.files[0])handleBatchTemplate(e.target.files[0]);});$('emailTemplateFile').addEventListener('change',e=>{if(e.target.files[0])handleEmailTemplate(e.target.files[0]);});}
+function handleFile(type,file){state[type+'File']=file;const info=$(`${type}FileInfo`),zone=$(`${type}DropZone`);info.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${fmt(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;info.classList.add('visible');zone.classList.add('has-file');info.querySelector('.chip-remove').onclick=()=>{state[type+'File']=null;info.classList.remove('visible');zone.classList.remove('has-file');updateBtn();};updateBtn();}
+function handleBatchFiles(files){state.batchSourceFiles=[...state.batchSourceFiles,...files];const info=$('batchSourceFileInfo'),zone=$('batchSourceDropZone');if(!state.batchSourceFiles.length){info.classList.remove('visible');zone.classList.remove('has-file');return;}info.innerHTML=`<div class="chip-name">📁 ${state.batchSourceFiles.length} fichier(s)</div><div class="chip-size">${fmt(state.batchSourceFiles.reduce((s,f)=>s+f.size,0))}</div><button class="chip-remove">✕ Tout retirer</button>`;info.classList.add('visible');zone.classList.add('has-file');info.querySelector('.chip-remove').onclick=()=>{state.batchSourceFiles=[];info.classList.remove('visible');zone.classList.remove('has-file');updateBtn();};updateBtn();}
+function handleBatchTemplate(file){state.batchTemplateFile=file;const info=$('batchTemplateFileInfo'),zone=$('batchTemplateDropZone');info.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${fmt(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;info.classList.add('visible');zone.classList.add('has-file');info.querySelector('.chip-remove').onclick=()=>{state.batchTemplateFile=null;info.classList.remove('visible');zone.classList.remove('has-file');updateBtn();};updateBtn();}
+function handleEmailTemplate(file){state.emailTemplateFile=file;const info=$('emailTemplateFileInfo'),zone=$('emailTemplateDropZone');info.innerHTML=`<div class="chip-name">📄 ${file.name}</div><div class="chip-size">${fmt(file.size)}</div><button class="chip-remove">✕ Retirer</button>`;info.classList.add('visible');zone.classList.add('has-file');info.querySelector('.chip-remove').onclick=()=>{state.emailTemplateFile=null;info.classList.remove('visible');zone.classList.remove('has-file');updateBtn();};updateBtn();}
+function fmt(b){if(b<1024)return b+' o';if(b<1048576)return(b/1024).toFixed(1)+' Ko';return(b/1048576).toFixed(1)+' Mo';}
+function updateBtn(){$('analyzeBtn').disabled=!(state.sourceFile&&state.templateFile&&!state.isProcessing);$('batchAnalyzeBtn').disabled=!(state.batchSourceFiles.length>0&&state.batchTemplateFile&&!state.isProcessing);$('emailAnalyzeBtn').disabled=!(state.gmailConnected&&state.emailTemplateFile&&!state.isProcessing);}
+function initButtons(){$('analyzeBtn').onclick=startAnalysis;$('batchAnalyzeBtn').onclick=startBatchAnalysis;$('emailAnalyzeBtn').onclick=startEmailAnalysis;$('downloadBtn').onclick=downloadResult;$('batchAnalyzeBtn').hidden=true;$('emailAnalyzeBtn').hidden=true;}
+function setLoading(btn,on){btn.querySelector('.btn-c').hidden=on;btn.querySelector('.btn-l').hidden=!on;}
+async function startAnalysis(){if(!state.sourceFile||!state.templateFile||state.isProcessing)return;state.isProcessing=true;setLoading($('analyzeBtn'),true);updateBtn();$('feedbackZone').hidden=false;$('progressSection').hidden=true;showStatus('loading','Analyse en cours','ARGOS extrait les données du document…');try{const fd=new FormData();fd.append('source',state.sourceFile);fd.append('template',state.templateFile);const res=await fetch('/api/extract',{method:'POST',body:fd});if(!res.ok)throw new Error('Erreur serveur');state.resultBlob=await res.blob();showStatus('success','Analyse terminée','Fichier XML prêt au téléchargement.');$('downloadBtnText').textContent='Télécharger le XML';$('downloadSection').hidden=false;}catch(e){showStatus('error','Échec',e.message);}finally{state.isProcessing=false;setLoading($('analyzeBtn'),false);updateBtn();}}
+async function startBatchAnalysis(){if(!state.batchSourceFiles.length||!state.batchTemplateFile||state.isProcessing)return;state.isProcessing=true;setLoading($('batchAnalyzeBtn'),true);updateBtn();$('feedbackZone').hidden=false;$('progressSection').hidden=false;updateProgress(0,state.batchSourceFiles.length,'Préparation…');showStatus('loading','Batch en cours',`${state.batchSourceFiles.length} fichier(s) à traiter…`);try{const fd=new FormData();fd.append('template',state.batchTemplateFile);state.batchSourceFiles.forEach(f=>fd.append('sources',f));let prog=0;const iv=setInterval(()=>{if(prog<state.batchSourceFiles.length-1){prog++;updateProgress(prog,state.batchSourceFiles.length,state.batchSourceFiles[prog]?.name||'…');}},2000);const res=await fetch('/api/extract-batch',{method:'POST',body:fd});clearInterval(iv);if(!res.ok)throw new Error('Erreur serveur');state.resultBlob=await res.blob();updateProgress(state.batchSourceFiles.length,state.batchSourceFiles.length,'Terminé');showStatus('success','Batch terminé',`${state.batchSourceFiles.length} fichier(s) traité(s).`);$('downloadBtnText').textContent='Télécharger le ZIP';$('downloadSection').hidden=false;}catch(e){showStatus('error','Échec',e.message);}finally{state.isProcessing=false;setLoading($('batchAnalyzeBtn'),false);updateBtn();}}
+async function startEmailAnalysis(){if(!state.gmailConnected||!state.emailTemplateFile||state.isProcessing)return;state.isProcessing=true;setLoading($('emailAnalyzeBtn'),true);updateBtn();$('feedbackZone').hidden=false;$('progressSection').hidden=false;updateProgress(0,1,'Connexion Gmail…');showStatus('loading','Analyse emails','Récupération des emails du label…');try{const fd=new FormData();fd.append('template',state.emailTemplateFile);fd.append('label',$('gmailLabel').value||'ARGOS');const res=await fetch('/api/extract-emails',{method:'POST',body:fd,credentials:'include'});if(!res.ok){const err=await res.json();throw new Error(err.error||'Erreur serveur');}state.resultBlob=await res.blob();updateProgress(1,1,'Terminé');showStatus('success','Emails traités','Extraction complète.');$('downloadBtnText').textContent='Télécharger le ZIP';$('downloadSection').hidden=false;}catch(e){showStatus('error','Échec',e.message);}finally{state.isProcessing=false;setLoading($('emailAnalyzeBtn'),false);updateBtn();}}
+function updateProgress(cur,tot,file){$('progressBar').style.width=(cur/tot*100)+'%';$('progressCount').textContent=`${cur} / ${tot}`;$('currentFileName').textContent=file;}
+function showStatus(type,title,msg){const card=$('statusCard');card.hidden=false;const ico={success:'✓',error:'✕',loading:'<span class="spinner" style="border-color:rgba(255,149,0,.2);border-top-color:var(--orange)"></span>'};card.className='status-row '+type;card.innerHTML=`<div class="status-ico">${ico[type]}</div><div><div class="status-title">${title}</div><div class="status-msg">${msg}</div></div>`;$('downloadSection').hidden=true;}
+function downloadResult(){if(!state.resultBlob)return;const url=URL.createObjectURL(state.resultBlob);const a=document.createElement('a');a.href=url;a.download=state.mode==='single'?`argos_${Date.now()}.xml`:`argos_${state.mode}_${Date.now()}.zip`;a.click();URL.revokeObjectURL(url);}
+function checkGmailAuth(){const p=new URLSearchParams(window.location.search);if(p.get('gmail_auth')==='success'){state.gmailConnected=true;updateGmailUI(true);window.history.replaceState({},'','/');}else if(p.get('gmail_auth')==='error'){$('feedbackZone').hidden=false;showStatus('error','Échec Gmail','Impossible de se connecter.');window.history.replaceState({},'','/');};}
+async function checkGmailStatus(){try{const r=await fetch('/api/gmail/status',{credentials:'include'});const d=await r.json();state.gmailConnected=d.connected;updateGmailUI(d.connected);}catch(e){}}
+async function connectGmail(){try{const r=await fetch('/api/gmail/auth',{credentials:'include'});const d=await r.json();if(d.auth_url)window.location.href=d.auth_url;}catch(e){}}
+async function disconnectGmail(){try{await fetch('/api/gmail/disconnect',{credentials:'include'});state.gmailConnected=false;updateGmailUI(false);}catch(e){}}
+function updateGmailUI(ok){const card=$('gmailCard'),btn=$('gmailConnectBtn'),status=$('gmailStatus'),lbl=$('labelInput');if(ok){card.classList.add('email-ok');btn.style.background='var(--green)';btn.style.borderColor='var(--green)';$('gmailBtnText').textContent='Connecté';status.classList.add('visible');lbl.style.display='block';}else{card.classList.remove('email-ok');btn.style.background='#DC3545';btn.style.borderColor='#DC3545';$('gmailBtnText').textContent='Se connecter';status.classList.remove('visible');lbl.style.display='none';}updateBtn();}
+</script>
 </body>
 </html>
