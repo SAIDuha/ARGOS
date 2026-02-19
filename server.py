@@ -144,28 +144,27 @@ def extract_email_with_gemini(fields, email_data):
     return json.loads(text.strip())
 
 def fill_xml(template_content, extractions, source_filename):
-    root = ET.fromstring(template_content)
     ext_map = {e["nom"]: e for e in extractions.get("extractions", [])}
-    champs = root.find("champs")
-    if champs is not None:  # Fix DeprecationWarning
-        for champ in champs.findall("champ"):
+    
+    # Récupérer l'ordre des champs depuis le template
+    template_root = ET.fromstring(template_content)
+    champs_order = []
+    champs_elem = template_root.find("champs")
+    if champs_elem is not None:
+        for champ in champs_elem.findall("champ"):
             nom = champ.findtext("nom", "").strip()
-            if nom in ext_map:
-                ext = ext_map[nom]
-                val_def = champ.find("valeur_defaut")
-                if val_def is not None:
-                    v = ext.get("valeur_defaut", "")
-                    val_def.text = ", ".join(v) if isinstance(v, list) else str(v)
-                src = champ.find("source_detection")
-                if src is not None:
-                    for tag in ["type_source", "reference", "explication"]:
-                        elem = src.find(tag)
-                        if elem is not None: elem.text = ext.get(tag, "")
-    meta = ET.SubElement(root, "metadata")
-    ET.SubElement(meta, "date_extraction").text = datetime.now().isoformat()
-    ET.SubElement(meta, "agent").text = "ARGOS"
-    ET.SubElement(meta, "source").text = source_filename
-    ET.SubElement(meta, "analyse").text = extractions.get("analyse_globale", "")
+            if nom:
+                champs_order.append(nom)
+
+    # Construire un XML simplifié : uniquement <nom> et <valeur_defaut>
+    root = ET.Element("extractions")
+    for nom in champs_order:
+        ext = ext_map.get(nom, {})
+        champ_el = ET.SubElement(root, "champ")
+        ET.SubElement(champ_el, "nom").text = nom
+        v = ext.get("valeur_defaut", "")
+        ET.SubElement(champ_el, "valeur_defaut").text = ", ".join(v) if isinstance(v, list) else str(v)
+
     xml_str = ET.tostring(root, encoding="unicode")
     return minidom.parseString(xml_str).toprettyxml(indent="  ")
 
