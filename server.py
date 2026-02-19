@@ -248,7 +248,7 @@ def extract_parts(service, msg_id, payload, data):
                 att = service.users().messages().attachments().get(userId='me', messageId=msg_id, id=body['attachmentId']).execute()
                 file_data = base64.urlsafe_b64decode(att['data'])
                 mime, _ = mimetypes.guess_type(payload['filename'])
-                info = {'filename': payload['filename'], 'mime_type': mime or 'application/octet-stream', 'type': 'unknown', 'content': None}
+                info = {'filename': payload['filename'], 'mime_type': mime or 'application/octet-stream', 'type': 'unknown', 'content': None, 'raw_bytes': file_data}
                 if mime and mime.startswith('image/'): info['type'], info['content'] = 'image', base64.b64encode(file_data).decode()
                 elif mime == 'application/pdf': info['type'], info['content'] = 'pdf', base64.b64encode(file_data).decode()
                 else: info['type'], info['content'] = 'text', file_data.decode('utf-8', errors='ignore')
@@ -408,21 +408,42 @@ def extract_emails():
                 print(f"[Extract Emails] Processing: {email['subject'][:30]}...")
                 extractions = extract_email_with_gemini(fields, email)
                 safe_subj = "".join(c for c in email['subject'][:20] if c.isalnum() or c in ' -_').strip().replace(' ', '_') or 'email'
-                out_name = f"{safe_subj}_{email['id'][:6]}.xml"
+                folder_name = f"{safe_subj}_{email['id'][:6]}"
+                email_dir = temp_dir / folder_name
+                email_dir.mkdir(exist_ok=True)
+
+                # Sauvegarder le XML extrait
                 result_xml = fill_xml(template_content, extractions, f"Email: {email['subject']}")
-                (temp_dir / out_name).write_text(result_xml, encoding='utf-8')
-                results.append({"id": email['id'], "subject": email['subject'], "status": "success"})
+                (email_dir / "extraction.xml").write_text(result_xml, encoding='utf-8')
+
+                # Sauvegarder les pièces jointes
+                att_count = 0
+                for att in email.get('attachments', []):
+                    try:
+                        att_filename = att.get('filename', f'piece_jointe_{att_count}')
+                        raw = att.get('raw_bytes')
+                        if raw:
+                            (email_dir / att_filename).write_bytes(raw)
+                        elif att['type'] == 'text':
+                            (email_dir / att_filename).write_text(att['content'], encoding='utf-8')
+                        att_count += 1
+                    except Exception as att_e:
+                        print(f"[Extract Emails] Attachment save error: {att_e}")
+
+                results.append({"id": email['id'], "subject": email['subject'], "status": "success", "attachments": att_count})
             except Exception as e:
                 print(f"[Extract Emails] Error processing email: {e}")
                 results.append({"id": email['id'], "subject": email['subject'], "status": "error", "error": str(e)})
-        
+
         zip_path = Path(tempfile.gettempdir()) / f"emails_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
         with zipfile.ZipFile(zip_path, 'w') as zf:
-            for f in temp_dir.glob("*.xml"): zf.write(f, f.name)
+            for f in temp_dir.rglob('*'):
+                if f.is_file():
+                    zf.write(f, f.relative_to(temp_dir))
             zf.writestr("_rapport.json", json.dumps({"label": label, "total": len(emails), "results": results}, indent=2))
-        
-        for f in temp_dir.glob("*"): f.unlink()
-        temp_dir.rmdir()
+
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
         
         print(f"[Extract Emails] Done! Returning ZIP")
         return send_file(zip_path, mimetype='application/zip', as_attachment=True)
