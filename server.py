@@ -143,10 +143,9 @@ def extract_email_with_gemini(fields, email_data):
     if text.endswith("```"): text = text[:-3]
     return json.loads(text.strip())
 
-def fill_xml(template_content, extractions, source_filename):
+def fill_xml_simple(template_content, extractions):
+    """XML simplifie : uniquement <nom> et <valeur_defaut>"""
     ext_map = {e["nom"]: e for e in extractions.get("extractions", [])}
-    
-    # Récupérer l'ordre des champs depuis le template
     template_root = ET.fromstring(template_content)
     champs_order = []
     champs_elem = template_root.find("champs")
@@ -155,8 +154,6 @@ def fill_xml(template_content, extractions, source_filename):
             nom = champ.findtext("nom", "").strip()
             if nom:
                 champs_order.append(nom)
-
-    # Construire un XML simplifié : uniquement <nom> et <valeur_defaut>
     root = ET.Element("extractions")
     for nom in champs_order:
         ext = ext_map.get(nom, {})
@@ -164,9 +161,40 @@ def fill_xml(template_content, extractions, source_filename):
         ET.SubElement(champ_el, "nom").text = nom
         v = ext.get("valeur_defaut", "")
         ET.SubElement(champ_el, "valeur_defaut").text = ", ".join(v) if isinstance(v, list) else str(v)
-
     xml_str = ET.tostring(root, encoding="unicode")
     return minidom.parseString(xml_str).toprettyxml(indent="  ")
+
+def fill_xml_complet(template_content, extractions, source_filename):
+    """XML complet : template rempli avec toutes les balises + source_detection + metadata"""
+    root = ET.fromstring(template_content)
+    ext_map = {e["nom"]: e for e in extractions.get("extractions", [])}
+    champs = root.find("champs")
+    if champs is not None:
+        for champ in champs.findall("champ"):
+            nom = champ.findtext("nom", "").strip()
+            if nom in ext_map:
+                ext = ext_map[nom]
+                val_def = champ.find("valeur_defaut")
+                if val_def is not None:
+                    v = ext.get("valeur_defaut", "")
+                    val_def.text = ", ".join(v) if isinstance(v, list) else str(v)
+                src = champ.find("source_detection")
+                if src is not None:
+                    for tag in ["type_source", "reference", "explication"]:
+                        elem = src.find(tag)
+                        if elem is not None:
+                            elem.text = ext.get(tag, "")
+    meta = ET.SubElement(root, "metadata_extraction")
+    ET.SubElement(meta, "date_extraction").text = datetime.now().isoformat()
+    ET.SubElement(meta, "agent").text = "ARGOS"
+    ET.SubElement(meta, "source").text = source_filename
+    ET.SubElement(meta, "analyse").text = extractions.get("analyse_globale", "")
+    xml_str = ET.tostring(root, encoding="unicode")
+    return minidom.parseString(xml_str).toprettyxml(indent="  ")
+
+def fill_xml(template_content, extractions, source_filename):
+    """Alias conserve pour la compatibilite avec les routes extract et extract-batch (retourne le complet)"""
+    return fill_xml_complet(template_content, extractions, source_filename)
 
 # ============================================================
 # GMAIL FUNCTIONS
@@ -271,10 +299,15 @@ def extract():
         fields, _ = load_xml_template(template_content)
         source_info = load_source_file(source_file.read(), source_file.filename)
         extractions = extract_with_gemini(fields, source_info)
-        result_xml = fill_xml(template_content, extractions, source_file.filename)
-        output = Path(tempfile.gettempdir()) / f"argos_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xml"
-        output.write_text(result_xml, encoding='utf-8')
-        return send_file(output, mimetype='application/xml', as_attachment=True, download_name=output.name)
+        xml_complet = fill_xml_complet(template_content, extractions, source_file.filename)
+        xml_simple = fill_xml_simple(template_content, extractions)
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        stem = Path(source_file.filename).stem
+        zip_path = Path(tempfile.gettempdir()) / f"argos_{ts}.zip"
+        with zipfile.ZipFile(zip_path, 'w') as zf:
+            zf.writestr(f"{stem}_complet.xml", xml_complet)
+            zf.writestr(f"{stem}_simple.xml", xml_simple)
+        return send_file(zip_path, mimetype='application/zip', as_attachment=True, download_name=zip_path.name)
     except Exception as e: return {"error": str(e)}, 500
 
 @app.route('/api/extract-batch', methods=['POST'])
@@ -293,17 +326,19 @@ def extract_batch():
             try:
                 source_info = load_source_file(sf.read(), sf.filename)
                 extractions = extract_with_gemini(fields, source_info)
-                result_xml = fill_xml(template_content, extractions, sf.filename)
-                out_name = f"{Path(sf.filename).stem}_extracted.xml"
-                (temp_dir / out_name).write_text(result_xml, encoding='utf-8')
+                stem = Path(sf.filename).stem
+                file_dir = temp_dir / stem
+                file_dir.mkdir(exist_ok=True)
+                (file_dir / f"{stem}_complet.xml").write_text(fill_xml_complet(template_content, extractions, sf.filename), encoding='utf-8')
+                (file_dir / f"{stem}_simple.xml").write_text(fill_xml_simple(template_content, extractions), encoding='utf-8')
                 results.append({"source": sf.filename, "status": "success"})
             except Exception as e: results.append({"source": sf.filename, "status": "error", "error": str(e)})
         zip_path = Path(tempfile.gettempdir()) / f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
         with zipfile.ZipFile(zip_path, 'w') as zf:
-            for f in temp_dir.glob("*.xml"): zf.write(f, f.name)
+            for f in temp_dir.rglob("*"):
+                if f.is_file(): zf.write(f, f.relative_to(temp_dir))
             zf.writestr("_rapport.json", json.dumps({"results": results}, indent=2))
-        for f in temp_dir.glob("*"): f.unlink()
-        temp_dir.rmdir()
+        import shutil; shutil.rmtree(temp_dir, ignore_errors=True)
         return send_file(zip_path, mimetype='application/zip', as_attachment=True)
     except Exception as e: return {"error": str(e)}, 500
 
@@ -412,9 +447,11 @@ def extract_emails():
                 email_dir = temp_dir / folder_name
                 email_dir.mkdir(exist_ok=True)
 
-                # Sauvegarder le XML extrait
-                result_xml = fill_xml(template_content, extractions, f"Email: {email['subject']}")
-                (email_dir / "extraction.xml").write_text(result_xml, encoding='utf-8')
+                # Sauvegarder les deux XML
+                xml_complet = fill_xml_complet(template_content, extractions, f"Email: {email['subject']}")
+                xml_simple = fill_xml_simple(template_content, extractions)
+                (email_dir / "extraction_complet.xml").write_text(xml_complet, encoding='utf-8')
+                (email_dir / "extraction_simple.xml").write_text(xml_simple, encoding='utf-8')
 
                 # Sauvegarder les pièces jointes
                 att_count = 0
