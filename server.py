@@ -4,6 +4,8 @@ import base64
 import mimetypes
 import tempfile
 import zipfile
+import requests as http_requests
+import re
 from pathlib import Path
 from datetime import datetime
 import xml.etree.ElementTree as ET
@@ -32,15 +34,11 @@ model = genai.GenerativeModel(MODEL_NAME)
 app = Flask(__name__, static_folder='.', static_url_path='')
 
 # ============================================================
-# FIX POUR RENDER.COM - Permet à Flask de reconnaître HTTPS
+# FIX POUR RENDER.COM
 # ============================================================
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
-
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "argos-secret-key-change-in-prod")
 
-# ============================================================
-# CONFIGURATION COOKIES POUR HTTPS/RENDER
-# ============================================================
 app.config.update(
     SESSION_COOKIE_SECURE=True,
     SESSION_COOKIE_HTTPONLY=True,
@@ -54,28 +52,475 @@ CORS(app, supports_credentials=True, origins=[
 ])
 
 # ============================================================
-# HELPER FUNCTIONS
+# PARSING DU TEMPLATE XML — NOUVELLE ARCHITECTURE
 # ============================================================
 
+def parse_champ(champ_elem):
+    """Parse un <champ> classique, compatible ancien ET nouveau format."""
+    field = {
+        "type": "champ",
+        "nom": champ_elem.findtext("nom", "").strip(),
+        "obligatoire": champ_elem.findtext("obligatoire", "false") == "true",
+        "multiple": champ_elem.findtext("multiple", "false") == "true",
+        "type_donnee": champ_elem.findtext("type_donnee", "string"),
+        "description": champ_elem.findtext("description", ""),
+        "valeurs_possibles": [],
+        "descriptions_externes": []
+    }
+
+    valeurs_elem = champ_elem.find("valeurs_possibles")
+    if valeurs_elem is not None:
+        for child in valeurs_elem:
+            if child.tag == "valeur":
+                # Ancien format simple : <valeur>XS</valeur>
+                if child.text and child.text.strip():
+                    field["valeurs_possibles"].append({
+                        "valeur": child.text.strip(),
+                        "description": ""
+                    })
+            elif child.tag == "valeur_possible":
+                # Nouveau format enrichi : <valeur_possible><valeur>XS</valeur><description>...</description></valeur_possible>
+                v = child.findtext("valeur", "").strip()
+                d = child.findtext("description", "").strip()
+                if v:
+                    field["valeurs_possibles"].append({"valeur": v, "description": d})
+
+    descs_ext = champ_elem.find("Descriptions_Externes")
+    if descs_ext is not None:
+        for de in descs_ext.findall("Description_Externe"):
+            if de.text and de.text.strip():
+                field["descriptions_externes"].append(de.text.strip())
+
+    return field
+
+
+def parse_champRGRS(rgrs_elem):
+    """Parse un <champRGRS> (groupe de sous-champs structurés)."""
+    groupe = {
+        "type": "groupe",
+        "nom": rgrs_elem.findtext("Nom", "").strip(),
+        "multiple": rgrs_elem.findtext("Multiple", "false").strip().lower() == "true",
+        "description": rgrs_elem.findtext("Description", "").strip(),
+        "sous_champs": [],
+        "descriptions_externes": []
+    }
+
+    for rgr in rgrs_elem.findall("champRGR"):
+        sous_champ = {
+            "nom": rgr.findtext("Nom", "").strip(),
+            "multiple": rgr.findtext("Multiple", "false").strip().lower() == "true",
+            "description": rgr.findtext("Description", "").strip()
+        }
+        if sous_champ["nom"]:
+            groupe["sous_champs"].append(sous_champ)
+
+    descs_ext = rgrs_elem.find("Descriptions_Externes")
+    if descs_ext is not None:
+        for de in descs_ext.findall("Description_Externe"):
+            if de.text and de.text.strip():
+                groupe["descriptions_externes"].append(de.text.strip())
+
+    return groupe
+
+
 def load_xml_template(xml_content):
+    """Parse le template XML — supporte champs classiques ET groupes champRGRS."""
     root = ET.fromstring(xml_content)
     fields = []
-    champs = root.find("champs")
-    if champs is not None:  # Fix DeprecationWarning
-        for champ in champs.findall("champ"):
-            field = {
-                "nom": champ.findtext("nom", "").strip(),
-                "obligatoire": champ.findtext("obligatoire", "false") == "true",
-                "multiple": champ.findtext("multiple", "false") == "true",
-                "type_donnee": champ.findtext("type_donnee", "string"),
-                "description": champ.findtext("description", ""),
-                "valeurs_possibles": []
-            }
-            valeurs = champ.find("valeurs_possibles")
-            if valeurs is not None:  # Fix DeprecationWarning
-                field["valeurs_possibles"] = [v.text.strip() for v in valeurs.findall("valeur") if v.text]
-            fields.append(field)
+    champs_elem = root.find("champs")
+    if champs_elem is not None:
+        for child in champs_elem:
+            if child.tag == "champ":
+                f = parse_champ(child)
+                if f["nom"]:
+                    fields.append(f)
+            elif child.tag == "champRGRS":
+                g = parse_champRGRS(child)
+                if g["nom"]:
+                    fields.append(g)
     return fields, root
+
+
+# ============================================================
+# GESTION DES DESCRIPTIONS EXTERNES (URLs)
+# ============================================================
+
+def resolve_drive_url(url):
+    """Convertit une URL Google Drive partagée en URL de téléchargement direct."""
+    match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
+    if match:
+        file_id = match.group(1)
+        return f"https://drive.google.com/uc?export=download&id={file_id}"
+    return url
+
+
+def fetch_external_url(url):
+    """
+    Télécharge une ressource externe (image, PDF) et retourne
+    un dict Gemini-compatible ou une chaîne de fallback.
+    """
+    try:
+        resolved = resolve_drive_url(url)
+        resp = http_requests.get(resolved, timeout=10, allow_redirects=True)
+        if resp.status_code == 200:
+            mime = resp.headers.get('content-type', '').split(';')[0].strip()
+            if mime.startswith('image/'):
+                return {"mime_type": mime, "data": base64.b64encode(resp.content).decode()}
+            elif 'pdf' in mime:
+                return {"mime_type": "application/pdf", "data": base64.b64encode(resp.content).decode()}
+            else:
+                return f"[Référence externe - {url}]"
+        else:
+            return f"[Référence externe non accessible ({resp.status_code}) - {url}]"
+    except Exception as e:
+        print(f"[External URL] Échec fetch {url}: {e}")
+        return f"[Référence externe indisponible - {url}]"
+
+
+def collect_external_parts(fields):
+    """
+    Collecte toutes les descriptions externes de tous les champs/groupes
+    et retourne une liste de parts Gemini (images/PDFs ou texte).
+    """
+    parts = []
+    for f in fields:
+        for url in f.get("descriptions_externes", []):
+            result = fetch_external_url(url)
+            parts.append(result)
+    return parts
+
+
+# ============================================================
+# CONSTRUCTION DES PROMPTS
+# ============================================================
+
+def build_fields_description(fields):
+    """Génère la description textuelle des champs pour le prompt."""
+    desc = ""
+    for f in fields:
+        if f["type"] == "champ":
+            desc += f"\n- {f['nom']} ({f['type_donnee']}): {f['description']}"
+            if f['valeurs_possibles']:
+                vals_str = []
+                for v in f['valeurs_possibles']:
+                    entry = v['valeur']
+                    if v['description']:
+                        entry += f" ({v['description']})"
+                    vals_str.append(entry)
+                desc += f" [Valeurs autorisées: {', '.join(vals_str)}]"
+            if f['obligatoire']:
+                desc += " [OBLIGATOIRE]"
+            if f['multiple']:
+                desc += " [MULTIPLE]"
+            if f['descriptions_externes']:
+                desc += f" [Voir exemples visuels: {', '.join(f['descriptions_externes'])}]"
+
+        elif f["type"] == "groupe":
+            desc += f"\n- GROUPE '{f['nom']}' (multiple={'oui' if f['multiple'] else 'non'}): {f['description']}"
+            desc += "\n  Sous-champs à extraire:"
+            for sc in f['sous_champs']:
+                desc += f"\n    * {sc['nom']}: {sc['description']}"
+                if sc['multiple']:
+                    desc += " [MULTIPLE]"
+            if f['descriptions_externes']:
+                desc += f"\n  [Voir exemples visuels: {', '.join(f['descriptions_externes'])}]"
+    return desc
+
+
+def build_json_format_doc(fields):
+    """Génère la documentation du format JSON attendu en réponse."""
+    champ_ex = '{"nom": "nom_champ", "valeur_defaut": "...", "type_source": "document|inference|...", "reference": "...", "explication": "..."}'
+    groupe_ex = '{"nom": "NomGroupe", "type": "groupe", "instances": [{"sous_champ1": "val1", "sous_champ2": "val2"}], "explication": "..."}'
+
+    has_groupes = any(f["type"] == "groupe" for f in fields)
+    examples = [champ_ex]
+    if has_groupes:
+        examples.append(groupe_ex)
+
+    return f"""{{"extractions": [{", ".join(examples)}], "analyse_globale": "..."}}"""
+
+
+def build_motif_list(fields):
+    """
+    Extrait la liste complète des motifs depuis le champ 'motif' du template.
+    Retourne une chaîne formatée motif → définition.
+    """
+    for f in fields:
+        if f.get("type") == "champ" and f.get("nom") == "motif":
+            lines = []
+            for v in f.get("valeurs_possibles", []):
+                line = f"  • {v['valeur']}"
+                if v.get("description"):
+                    line += f" → {v['description']}"
+                lines.append(line)
+            return "\n".join(lines)
+    return ""
+
+
+def build_prompt(fields):
+    fields_desc = build_fields_description(fields)
+    motif_list = build_motif_list(fields)
+    json_fmt = build_json_format_doc(fields)
+
+    return f"""Analyse ce document et extrais les informations demandées.
+
+══════════════════════════════════════════
+ORDRE DE RAISONNEMENT OBLIGATOIRE
+══════════════════════════════════════════
+Tu dois raisonner dans CET ordre précis :
+
+ÉTAPE 1 — IDENTIFIER LE MOTIF
+  Lis attentivement le document.
+  Trouve le motif qui correspond le mieux au sujet parmi cette liste officielle :
+{motif_list}
+
+ÉTAPE 2 — DÉDUIRE LE TYPE ET LA NATURE
+  Chaque motif commence par un préfixe entre crochets, ex: [Demande commerciale] ou [Facturation].
+  Ce préfixe te donne directement :
+  - Si le préfixe contient "Demande", "Information", "Modification", "Interventions",
+    "Paramétrage", "Qualité / HSE", "Suivi commande" → type_sollicitation = "Demande"
+    et nature_demande = le texte du préfixe (sans les crochets).
+  - Sinon (ex: "Facturation", "livraison non effectuée", "manquants / erreurs articles",
+    "Mise en place", "Qualité / produit", "qualité / service", "Réclamation en doublon",
+    "Relance Réclamation et/ou demande", "Suivi Client / Fin de contrat", "Sur stock")
+    → type_sollicitation = "Réclamation" et nature_reclamation = le texte du préfixe.
+  - nature_demande reste vide si c'est une Réclamation.
+  - nature_reclamation reste vide si c'est une Demande.
+
+ÉTAPE 3 — EXTRAIRE TOUS LES AUTRES CHAMPS
+  Une fois motif, type_sollicitation et nature déterminés, extrais les autres champs :
+{fields_desc}
+
+══════════════════════════════════════════
+RÈGLES GÉNÉRALES
+══════════════════════════════════════════
+- Respecte STRICTEMENT les valeurs autorisées pour chaque champ.
+- Pour les GROUPES, retourne une instance par occurrence détectée.
+- Si une information est absente, utilise une chaîne vide.
+
+RÉPONDS UNIQUEMENT EN JSON valide :
+{json_fmt}"""
+
+
+def build_email_prompt(fields):
+    fields_desc = build_fields_description(fields)
+    motif_list = build_motif_list(fields)
+    json_fmt = build_json_format_doc(fields)
+
+    return f"""Analyse cet email (corps + pièces jointes) et extrais les informations demandées.
+
+══════════════════════════════════════════
+ORDRE DE RAISONNEMENT OBLIGATOIRE
+══════════════════════════════════════════
+Tu dois raisonner dans CET ordre précis :
+
+ÉTAPE 1 — IDENTIFIER LE MOTIF
+  Lis attentivement le corps de l'email et ses pièces jointes.
+  Trouve le motif qui correspond le mieux au sujet parmi cette liste officielle :
+{motif_list}
+
+ÉTAPE 2 — DÉDUIRE LE TYPE ET LA NATURE
+  Chaque motif commence par un préfixe entre crochets, ex: [Demande commerciale] ou [Facturation].
+  Ce préfixe te donne directement :
+  - Si le préfixe contient "Demande", "Information", "Modification", "Interventions",
+    "Paramétrage", "Qualité / HSE", "Suivi commande" → type_sollicitation = "Demande"
+    et nature_demande = le texte du préfixe (sans les crochets).
+  - Sinon (ex: "Facturation", "livraison non effectuée", "manquants / erreurs articles",
+    "Mise en place", "Qualité / produit", "qualité / service", "Réclamation en doublon",
+    "Relance Réclamation et/ou demande", "Suivi Client / Fin de contrat", "Sur stock")
+    → type_sollicitation = "Réclamation" et nature_reclamation = le texte du préfixe.
+  - nature_demande reste vide si c'est une Réclamation.
+  - nature_reclamation reste vide si c'est une Demande.
+
+ÉTAPE 3 — EXTRAIRE TOUS LES AUTRES CHAMPS
+  Une fois motif, type_sollicitation et nature déterminés, extrais les autres champs :
+{fields_desc}
+
+══════════════════════════════════════════
+RÈGLES GÉNÉRALES
+══════════════════════════════════════════
+- type_source possible : email_corps | email_sujet | piece_jointe | inference
+- Respecte STRICTEMENT les valeurs autorisées pour chaque champ.
+- Pour les GROUPES, retourne une instance par occurrence détectée.
+- Si une information est absente, utilise une chaîne vide.
+
+RÉPONDS EN JSON valide :
+{json_fmt}"""
+
+
+# ============================================================
+# EXTRACTION GEMINI
+# ============================================================
+
+def clean_json_response(text):
+    text = text.strip()
+    for prefix in ["```json", "```"]:
+        if text.startswith(prefix):
+            text = text[len(prefix):]
+    if text.endswith("```"):
+        text = text[:-3]
+    return json.loads(text.strip())
+
+
+def extract_with_gemini(fields, source_info):
+    prompt = build_prompt(fields)
+    content_parts = []
+
+    # Ajouter les références externes (images/PDFs d'exemples)
+    ext_parts = collect_external_parts(fields)
+    for ep in ext_parts:
+        if isinstance(ep, dict):
+            content_parts.append(ep)
+        else:
+            # Texte fallback : on l'incorpore dans le prompt
+            prompt = ep + "\n\n" + prompt
+
+    # Ajouter le document source
+    if source_info["type"] in ["image", "pdf"]:
+        content_parts.append({"mime_type": source_info["mime_type"], "data": source_info["content"]})
+    else:
+        prompt = f"{prompt}\n\nDOCUMENT:\n{source_info['content']}"
+
+    content_parts.append(prompt)
+    response = model.generate_content(content_parts)
+    return clean_json_response(response.text)
+
+
+def extract_email_with_gemini(fields, email_data):
+    prompt = build_email_prompt(fields)
+    content_parts = []
+
+    # Références externes
+    ext_parts = collect_external_parts(fields)
+    for ep in ext_parts:
+        if isinstance(ep, dict):
+            content_parts.append(ep)
+        else:
+            prompt = ep + "\n\n" + prompt
+
+    # Corps de l'email
+    email_text = f"De: {email_data['from']}\nSujet: {email_data['subject']}\nDate: {email_data['date']}\n\n{email_data['body']}"
+
+    # Pièces jointes
+    for att in email_data.get('attachments', []):
+        if att['type'] in ['image', 'pdf']:
+            content_parts.append({"mime_type": att['mime_type'], "data": att['content']})
+        elif att['type'] == 'text':
+            email_text += f"\n\nPJ ({att['filename']}):\n{att['content']}"
+
+    content_parts.append(f"{prompt}\n\nEMAIL:\n{email_text}")
+    response = model.generate_content(content_parts)
+    return clean_json_response(response.text)
+
+
+# ============================================================
+# GÉNÉRATION DES XML DE SORTIE
+# ============================================================
+
+def build_ext_map(extractions):
+    """Construit un dict nom -> extraction depuis la liste Gemini."""
+    return {e["nom"]: e for e in extractions.get("extractions", [])}
+
+
+def render_groupe_instances(groupe_el, instances):
+    """Écrit les instances d'un groupe dans l'élément XML parent."""
+    instances_el = ET.SubElement(groupe_el, "instances")
+    for inst in instances:
+        inst_el = ET.SubElement(instances_el, "instance")
+        for k, v in inst.items():
+            tag = re.sub(r'[^a-zA-Z0-9_\-]', '_', str(k))
+            child = ET.SubElement(inst_el, tag)
+            child.text = str(v) if v is not None else ""
+
+
+def fill_xml_simple(template_content, extractions):
+    """XML simplifié : <nom> + <valeur_defaut> pour les champs, instances pour les groupes."""
+    ext_map = build_ext_map(extractions)
+    template_root = ET.fromstring(template_content)
+    root = ET.Element("extractions")
+
+    champs_elem = template_root.find("champs")
+    if champs_elem is not None:
+        for child in champs_elem:
+            if child.tag == "champ":
+                nom = child.findtext("nom", "").strip()
+                ext = ext_map.get(nom, {})
+                el = ET.SubElement(root, "champ")
+                ET.SubElement(el, "nom").text = nom
+                v = ext.get("valeur_defaut", "")
+                ET.SubElement(el, "valeur_defaut").text = ", ".join(v) if isinstance(v, list) else str(v)
+
+            elif child.tag == "champRGRS":
+                nom = child.findtext("Nom", "").strip()
+                ext = ext_map.get(nom, {})
+                el = ET.SubElement(root, "groupe")
+                ET.SubElement(el, "nom").text = nom
+                instances = ext.get("instances", [])
+                if instances:
+                    render_groupe_instances(el, instances)
+
+    xml_str = ET.tostring(root, encoding="unicode")
+    return minidom.parseString(xml_str).toprettyxml(indent="  ")
+
+
+def fill_xml_complet(template_content, extractions, source_filename):
+    """XML complet : template rempli avec source_detection + groupes + metadata."""
+    root = ET.fromstring(template_content)
+    ext_map = build_ext_map(extractions)
+
+    champs_elem = root.find("champs")
+    if champs_elem is not None:
+        # Champs classiques
+        for champ in champs_elem.findall("champ"):
+            nom = champ.findtext("nom", "").strip()
+            if nom in ext_map:
+                ext = ext_map[nom]
+                val_def = champ.find("valeur_defaut")
+                if val_def is not None:
+                    v = ext.get("valeur_defaut", "")
+                    val_def.text = ", ".join(v) if isinstance(v, list) else str(v)
+                src = champ.find("source_detection")
+                if src is not None:
+                    for tag in ["type_source", "reference", "explication"]:
+                        elem = src.find(tag)
+                        if elem is not None:
+                            elem.text = ext.get(tag, "")
+
+        # Groupes champRGRS
+        for rgrs in champs_elem.findall("champRGRS"):
+            nom = rgrs.findtext("Nom", "").strip()
+            if nom in ext_map:
+                ext = ext_map[nom]
+                instances = ext.get("instances", [])
+                # Supprimer les anciennes instances si présentes
+                old = rgrs.find("extractions_groupes")
+                if old is not None:
+                    rgrs.remove(old)
+                # Ajouter le bloc d'extractions
+                ext_el = ET.SubElement(rgrs, "extractions_groupes")
+                ET.SubElement(ext_el, "explication").text = ext.get("explication", "")
+                if instances:
+                    render_groupe_instances(ext_el, instances)
+
+    # Metadata globale
+    meta = ET.SubElement(root, "metadata_extraction")
+    ET.SubElement(meta, "date_extraction").text = datetime.now().isoformat()
+    ET.SubElement(meta, "agent").text = "ARGOS"
+    ET.SubElement(meta, "source").text = source_filename
+    ET.SubElement(meta, "analyse").text = extractions.get("analyse_globale", "")
+
+    xml_str = ET.tostring(root, encoding="unicode")
+    return minidom.parseString(xml_str).toprettyxml(indent="  ")
+
+
+def fill_xml(template_content, extractions, source_filename):
+    """Alias de compatibilité."""
+    return fill_xml_complet(template_content, extractions, source_filename)
+
+
+# ============================================================
+# HELPER FICHIER SOURCE
+# ============================================================
 
 def load_source_file(content, filename):
     mime_type, _ = mimetypes.guess_type(filename)
@@ -91,110 +536,6 @@ def load_source_file(content, filename):
         info["content"] = content.decode("utf-8", errors="ignore")
     return info
 
-def build_prompt(fields):
-    fields_desc = ""
-    for f in fields:
-        fields_desc += f"\n- {f['nom']} ({f['type_donnee']}): {f['description']}"
-        if f['valeurs_possibles']: fields_desc += f" [Valeurs: {', '.join(f['valeurs_possibles'])}]"
-        if f['obligatoire']: fields_desc += " [OBLIGATOIRE]"
-        if f['multiple']: fields_desc += " [MULTIPLE]"
-    return f"""Analyse ce document et extrais les informations suivantes.
-CHAMPS À EXTRAIRE:{fields_desc}
-RÉPONDS UNIQUEMENT EN JSON:
-{{"extractions": [{{"nom": "...", "valeur_defaut": "...", "type_source": "...", "reference": "...", "explication": "..."}}], "analyse_globale": "..."}}"""
-
-def build_email_prompt(fields):
-    fields_desc = ""
-    for f in fields:
-        fields_desc += f"\n- {f['nom']} ({f['type_donnee']}): {f['description']}"
-        if f['valeurs_possibles']: fields_desc += f" [Valeurs: {', '.join(f['valeurs_possibles'])}]"
-        if f['obligatoire']: fields_desc += " [OBLIGATOIRE]"
-    return f"""Analyse cet email (message + pièces jointes) et extrais:
-CHAMPS:{fields_desc}
-RÉPONDS EN JSON: {{"extractions": [{{"nom": "...", "valeur_defaut": "...", "type_source": "email_corps|email_sujet|piece_jointe|inference", "reference": "...", "explication": "..."}}], "analyse_globale": "..."}}"""
-
-def extract_with_gemini(fields, source_info):
-    prompt = build_prompt(fields)
-    if source_info["type"] in ["image", "pdf"]:
-        content = [{"mime_type": source_info["mime_type"], "data": source_info["content"]}, prompt]
-    else:
-        content = [f"{prompt}\n\nDOCUMENT:\n{source_info['content']}"]
-    response = model.generate_content(content)
-    text = response.text.strip()
-    for prefix in ["```json", "```"]: 
-        if text.startswith(prefix): text = text[len(prefix):]
-    if text.endswith("```"): text = text[:-3]
-    return json.loads(text.strip())
-
-def extract_email_with_gemini(fields, email_data):
-    prompt = build_email_prompt(fields)
-    content_parts = []
-    email_text = f"De: {email_data['from']}\nSujet: {email_data['subject']}\nDate: {email_data['date']}\n\n{email_data['body']}"
-    for att in email_data.get('attachments', []):
-        if att['type'] in ['image', 'pdf']:
-            content_parts.append({"mime_type": att['mime_type'], "data": att['content']})
-        elif att['type'] == 'text':
-            email_text += f"\n\nPJ ({att['filename']}):\n{att['content']}"
-    content_parts.append(f"{prompt}\n\nEMAIL:\n{email_text}")
-    response = model.generate_content(content_parts)
-    text = response.text.strip()
-    for prefix in ["```json", "```"]: 
-        if text.startswith(prefix): text = text[len(prefix):]
-    if text.endswith("```"): text = text[:-3]
-    return json.loads(text.strip())
-
-def fill_xml_simple(template_content, extractions):
-    """XML simplifie : uniquement <nom> et <valeur_defaut>"""
-    ext_map = {e["nom"]: e for e in extractions.get("extractions", [])}
-    template_root = ET.fromstring(template_content)
-    champs_order = []
-    champs_elem = template_root.find("champs")
-    if champs_elem is not None:
-        for champ in champs_elem.findall("champ"):
-            nom = champ.findtext("nom", "").strip()
-            if nom:
-                champs_order.append(nom)
-    root = ET.Element("extractions")
-    for nom in champs_order:
-        ext = ext_map.get(nom, {})
-        champ_el = ET.SubElement(root, "champ")
-        ET.SubElement(champ_el, "nom").text = nom
-        v = ext.get("valeur_defaut", "")
-        ET.SubElement(champ_el, "valeur_defaut").text = ", ".join(v) if isinstance(v, list) else str(v)
-    xml_str = ET.tostring(root, encoding="unicode")
-    return minidom.parseString(xml_str).toprettyxml(indent="  ")
-
-def fill_xml_complet(template_content, extractions, source_filename):
-    """XML complet : template rempli avec toutes les balises + source_detection + metadata"""
-    root = ET.fromstring(template_content)
-    ext_map = {e["nom"]: e for e in extractions.get("extractions", [])}
-    champs = root.find("champs")
-    if champs is not None:
-        for champ in champs.findall("champ"):
-            nom = champ.findtext("nom", "").strip()
-            if nom in ext_map:
-                ext = ext_map[nom]
-                val_def = champ.find("valeur_defaut")
-                if val_def is not None:
-                    v = ext.get("valeur_defaut", "")
-                    val_def.text = ", ".join(v) if isinstance(v, list) else str(v)
-                src = champ.find("source_detection")
-                if src is not None:
-                    for tag in ["type_source", "reference", "explication"]:
-                        elem = src.find(tag)
-                        if elem is not None:
-                            elem.text = ext.get(tag, "")
-    meta = ET.SubElement(root, "metadata_extraction")
-    ET.SubElement(meta, "date_extraction").text = datetime.now().isoformat()
-    ET.SubElement(meta, "agent").text = "ARGOS"
-    ET.SubElement(meta, "source").text = source_filename
-    ET.SubElement(meta, "analyse").text = extractions.get("analyse_globale", "")
-    xml_str = ET.tostring(root, encoding="unicode")
-    return minidom.parseString(xml_str).toprettyxml(indent="  ")
-
-def fill_xml(template_content, extractions, source_filename):
-    """Alias conserve pour la compatibilite avec les routes extract et extract-batch (retourne le complet)"""
-    return fill_xml_complet(template_content, extractions, source_filename)
 
 # ============================================================
 # GMAIL FUNCTIONS
@@ -205,15 +546,15 @@ def get_gmail_flow():
     return Flow.from_client_config(
         {"web": {"client_id": GOOGLE_CLIENT_ID, "client_secret": GOOGLE_CLIENT_SECRET,
                  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-                 "token_uri": "https://oauth2.googleapis.com/token", "redirect_uris": [redirect_uri]}},
+                 "token_uri": "https://oauth2.googleapis.com/token",
+                 "redirect_uris": [redirect_uri]}},
         scopes=GMAIL_SCOPES, redirect_uri=redirect_uri)
 
+
 def get_credentials_from_session():
-    """Récupère les credentials depuis la session Flask"""
     creds_data = session.get('gmail_credentials')
     if not creds_data:
         return None
-    
     creds = Credentials(
         token=creds_data['token'],
         refresh_token=creds_data['refresh_token'],
@@ -222,33 +563,35 @@ def get_credentials_from_session():
         client_secret=creds_data['client_secret'],
         scopes=creds_data['scopes']
     )
-    
-    # Refresh si expiré
     if creds.expired and creds.refresh_token:
         try:
             creds.refresh(Request())
-            # Mettre à jour la session avec le nouveau token
             session['gmail_credentials']['token'] = creds.token
             session.modified = True
         except Exception as e:
             print(f"[Gmail] Token refresh failed: {e}")
             return None
-    
     return creds
+
 
 def get_label_id(service, label_name):
     for label in service.users().labels().list(userId='me').execute().get('labels', []):
-        if label['name'].lower() == label_name.lower(): return label['id']
+        if label['name'].lower() == label_name.lower():
+            return label['id']
     return None
+
 
 def get_emails_from_label(service, label_name):
     label_id = get_label_id(service, label_name)
-    if not label_id: return []
+    if not label_id:
+        return []
     emails = []
     for msg in service.users().messages().list(userId='me', labelIds=[label_id]).execute().get('messages', []):
         email = get_email_details(service, msg['id'])
-        if email: emails.append(email)
+        if email:
+            emails.append(email)
     return emails
+
 
 def get_email_details(service, msg_id):
     try:
@@ -260,41 +603,56 @@ def get_email_details(service, msg_id):
             elif h['name'].lower() == 'date': data['date'] = h['value']
         extract_parts(service, msg_id, msg['payload'], data)
         return data
-    except: return None
+    except:
+        return None
+
 
 def extract_parts(service, msg_id, payload, data):
     if 'parts' in payload:
-        for part in payload['parts']: extract_parts(service, msg_id, part, data)
+        for part in payload['parts']:
+            extract_parts(service, msg_id, part, data)
     else:
         body = payload.get('body', {})
         if body.get('data'):
             decoded = base64.urlsafe_b64decode(body['data']).decode('utf-8', errors='ignore')
-            if payload.get('mimeType') == 'text/plain' and not data['body']: data['body'] = decoded
-            elif payload.get('mimeType') == 'text/html' and not data['body']: data['body'] = decoded
+            if payload.get('mimeType') == 'text/plain' and not data['body']:
+                data['body'] = decoded
+            elif payload.get('mimeType') == 'text/html' and not data['body']:
+                data['body'] = decoded
         elif body.get('attachmentId') and payload.get('filename'):
             try:
                 att = service.users().messages().attachments().get(userId='me', messageId=msg_id, id=body['attachmentId']).execute()
                 file_data = base64.urlsafe_b64decode(att['data'])
                 mime, _ = mimetypes.guess_type(payload['filename'])
-                info = {'filename': payload['filename'], 'mime_type': mime or 'application/octet-stream', 'type': 'unknown', 'content': None, 'raw_bytes': file_data}
-                if mime and mime.startswith('image/'): info['type'], info['content'] = 'image', base64.b64encode(file_data).decode()
-                elif mime == 'application/pdf': info['type'], info['content'] = 'pdf', base64.b64encode(file_data).decode()
-                else: info['type'], info['content'] = 'text', file_data.decode('utf-8', errors='ignore')
+                info = {'filename': payload['filename'], 'mime_type': mime or 'application/octet-stream',
+                        'type': 'unknown', 'content': None, 'raw_bytes': file_data}
+                if mime and mime.startswith('image/'):
+                    info['type'], info['content'] = 'image', base64.b64encode(file_data).decode()
+                elif mime == 'application/pdf':
+                    info['type'], info['content'] = 'pdf', base64.b64encode(file_data).decode()
+                else:
+                    info['type'], info['content'] = 'text', file_data.decode('utf-8', errors='ignore')
                 data['attachments'].append(info)
-            except: pass
+            except:
+                pass
+
 
 # ============================================================
 # ROUTES
 # ============================================================
 
 @app.route('/')
-def index(): return send_from_directory('.', 'argos.html')
+def index():
+    return send_from_directory('.', 'argos.html')
+
 
 @app.route('/api/extract', methods=['POST'])
 def extract():
     try:
-        source_file, template_file = request.files.get('source'), request.files.get('template')
-        if not source_file or not template_file: return {"error": "Fichiers requis"}, 400
+        source_file = request.files.get('source')
+        template_file = request.files.get('template')
+        if not source_file or not template_file:
+            return {"error": "Fichiers requis"}, 400
         template_content = template_file.read().decode('utf-8')
         fields, _ = load_xml_template(template_content)
         source_info = load_source_file(source_file.read(), source_file.filename)
@@ -308,17 +666,21 @@ def extract():
             zf.writestr(f"{stem}_complet.xml", xml_complet)
             zf.writestr(f"{stem}_simple.xml", xml_simple)
         return send_file(zip_path, mimetype='application/zip', as_attachment=True, download_name=zip_path.name)
-    except Exception as e: return {"error": str(e)}, 500
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 
 @app.route('/api/extract-batch', methods=['POST'])
 def extract_batch():
     try:
         template_file = request.files.get('template')
-        if not template_file: return {"error": "Template requis"}, 400
+        if not template_file:
+            return {"error": "Template requis"}, 400
         template_content = template_file.read().decode('utf-8')
         fields, _ = load_xml_template(template_content)
         sources = request.files.getlist('sources')
-        if not sources: return {"error": "Fichiers requis"}, 400
+        if not sources:
+            return {"error": "Fichiers requis"}, 400
         temp_dir = Path(tempfile.gettempdir()) / f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         temp_dir.mkdir(exist_ok=True)
         results = []
@@ -332,15 +694,20 @@ def extract_batch():
                 (file_dir / f"{stem}_complet.xml").write_text(fill_xml_complet(template_content, extractions, sf.filename), encoding='utf-8')
                 (file_dir / f"{stem}_simple.xml").write_text(fill_xml_simple(template_content, extractions), encoding='utf-8')
                 results.append({"source": sf.filename, "status": "success"})
-            except Exception as e: results.append({"source": sf.filename, "status": "error", "error": str(e)})
+            except Exception as e:
+                results.append({"source": sf.filename, "status": "error", "error": str(e)})
         zip_path = Path(tempfile.gettempdir()) / f"batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
         with zipfile.ZipFile(zip_path, 'w') as zf:
             for f in temp_dir.rglob("*"):
-                if f.is_file(): zf.write(f, f.relative_to(temp_dir))
+                if f.is_file():
+                    zf.write(f, f.relative_to(temp_dir))
             zf.writestr("_rapport.json", json.dumps({"results": results}, indent=2))
-        import shutil; shutil.rmtree(temp_dir, ignore_errors=True)
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
         return send_file(zip_path, mimetype='application/zip', as_attachment=True)
-    except Exception as e: return {"error": str(e)}, 500
+    except Exception as e:
+        return {"error": str(e)}, 500
+
 
 @app.route('/api/gmail/auth')
 def gmail_auth():
@@ -351,26 +718,23 @@ def gmail_auth():
         session.modified = True
         print(f"[OAuth] Auth initiated")
         return jsonify({"auth_url": url})
-    except Exception as e: 
+    except Exception as e:
         print(f"[OAuth] Auth error: {e}")
         return {"error": str(e)}, 500
+
 
 @app.route('/oauth/callback')
 def oauth_callback():
     try:
         print(f"[OAuth] Callback received")
-        
         code = request.args.get('code')
         if not code:
             error = request.args.get('error', 'No code received')
             print(f"[OAuth] Error: {error}")
             return redirect('/?gmail_auth=error')
-        
         flow = get_gmail_flow()
         flow.fetch_token(authorization_response=request.url)
         creds = flow.credentials
-        
-        # Stocker les credentials DIRECTEMENT dans la session
         session['gmail_credentials'] = {
             'token': creds.token,
             'refresh_token': creds.refresh_token,
@@ -380,21 +744,20 @@ def oauth_callback():
             'scopes': list(creds.scopes) if creds.scopes else GMAIL_SCOPES
         }
         session.modified = True
-        
-        print(f"[OAuth] Success! Credentials stored in session")
+        print(f"[OAuth] Success!")
         return redirect('/?gmail_auth=success')
-        
     except Exception as e:
         print(f"[OAuth] Callback error: {e}")
         import traceback
         traceback.print_exc()
         return redirect('/?gmail_auth=error')
 
+
 @app.route('/api/gmail/status')
 def gmail_status():
     connected = 'gmail_credentials' in session and session['gmail_credentials'] is not None
-    print(f"[Gmail Status] Connected: {connected}")
     return jsonify({"connected": connected})
+
 
 @app.route('/api/gmail/disconnect')
 def gmail_disconnect():
@@ -402,42 +765,35 @@ def gmail_disconnect():
     session.modified = True
     return jsonify({"success": True})
 
+
 @app.route('/api/extract-emails', methods=['POST'])
 def extract_emails():
     try:
         print("[Extract Emails] Starting...")
-        
-        # Récupérer les credentials depuis la session
         creds = get_credentials_from_session()
         if not creds:
-            print("[Extract Emails] No credentials found")
             return {"error": "Non connecté à Gmail"}, 401
-        
-        print("[Extract Emails] Credentials OK")
-        
+
         template_file = request.files.get('template')
-        if not template_file: 
+        if not template_file:
             return {"error": "Template requis"}, 400
-        
+
         template_content = template_file.read().decode('utf-8')
         fields, _ = load_xml_template(template_content)
         label = request.form.get('label', 'ARGOS')
-        
+
         print(f"[Extract Emails] Looking for label: {label}")
-        
         service = build('gmail', 'v1', credentials=creds)
         emails = get_emails_from_label(service, label)
-        
-        if not emails: 
-            print(f"[Extract Emails] No emails found in label '{label}'")
+
+        if not emails:
             return {"error": f"Aucun email dans le label '{label}'"}, 404
-        
+
         print(f"[Extract Emails] Found {len(emails)} emails")
-        
         temp_dir = Path(tempfile.gettempdir()) / f"emails_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         temp_dir.mkdir(exist_ok=True)
         results = []
-        
+
         for email in emails:
             try:
                 print(f"[Extract Emails] Processing: {email['subject'][:30]}...")
@@ -447,13 +803,11 @@ def extract_emails():
                 email_dir = temp_dir / folder_name
                 email_dir.mkdir(exist_ok=True)
 
-                # Sauvegarder les deux XML
                 xml_complet = fill_xml_complet(template_content, extractions, f"Email: {email['subject']}")
                 xml_simple = fill_xml_simple(template_content, extractions)
                 (email_dir / "extraction_complet.xml").write_text(xml_complet, encoding='utf-8')
                 (email_dir / "extraction_simple.xml").write_text(xml_simple, encoding='utf-8')
 
-                # Sauvegarder les pièces jointes
                 att_count = 0
                 for att in email.get('attachments', []):
                     try:
@@ -481,15 +835,15 @@ def extract_emails():
 
         import shutil
         shutil.rmtree(temp_dir, ignore_errors=True)
-        
         print(f"[Extract Emails] Done! Returning ZIP")
         return send_file(zip_path, mimetype='application/zip', as_attachment=True)
-        
+
     except Exception as e:
         print(f"[Extract Emails] Error: {e}")
         import traceback
         traceback.print_exc()
         return {"error": str(e)}, 500
+
 
 @app.route('/debug/session')
 def debug_session():
@@ -497,6 +851,7 @@ def debug_session():
         "has_credentials": 'gmail_credentials' in session,
         "session_keys": list(session.keys())
     })
+
 
 if __name__ == '__main__':
     print("🚀 ARGOS Server - http://localhost:5000")
