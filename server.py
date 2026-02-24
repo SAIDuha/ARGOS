@@ -227,17 +227,23 @@ def build_fields_description(fields):
     return desc
 
 
+
 def build_json_format_doc(fields):
     """Génère la documentation du format JSON attendu en réponse."""
-    champ_ex = '{"nom": "nom_champ", "valeur_defaut": "...", "type_source": "document|inference|...", "reference": "...", "explication": "..."}'
-    groupe_ex = '{"nom": "NomGroupe", "type": "groupe", "instances": [{"sous_champ1": "val1", "sous_champ2": "val2"}], "explication": "..."}'
+    champ_ex = '{"nom": "NOM_DU_CHAMP", "valeur_defaut": "VALEUR_REELLE_EXTRAITE", "type_source": "email_corps|email_sujet|piece_jointe|inference", "reference": "EXTRAIT_OU_LOCALISATION", "explication": "POURQUOI_CETTE_VALEUR"}'
+    groupe_ex = '{"nom": "NOM_DU_GROUPE", "type": "groupe", "instances": [{"sous_champ1": "VALEUR1", "sous_champ2": "VALEUR2"}], "explication": "POURQUOI_CES_INSTANCES"}'
 
     has_groupes = any(f["type"] == "groupe" for f in fields)
     examples = [champ_ex]
     if has_groupes:
         examples.append(groupe_ex)
 
-    return f"""{{"extractions": [{", ".join(examples)}], "analyse_globale": "..."}}"""
+    return (
+        '{"extractions": [' + ", ".join(examples) + '], "analyse_globale": "SYNTHESE_GLOBALE_DU_DOCUMENT"}\n\n'
+        "IMPORTANT: Remplace CHAQUE valeur en MAJUSCULES par la vraie information extraite du document.\n"
+        "Ne copie JAMAIS les placeholders en majuscules ni \"...\" comme valeur reelle.\n"
+        "Un champ obligatoire NE PEUT PAS avoir une valeur vide ou un placeholder."
+    )
 
 
 def build_motif_list(fields):
