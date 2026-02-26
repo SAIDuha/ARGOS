@@ -684,7 +684,7 @@ def extract():
 def extract_pdf_pages_as_images(pdf_bytes, dpi=150):
     """
     Extrait chaque page d'un PDF en image PNG.
-    Retourne une liste de dicts : {"filename": "page_01.png", "data": bytes}
+    Retourne une liste de dicts : {"filename": "page_01.png", "data": bytes, "index": i}
     """
     if not PYMUPDF_AVAILABLE:
         return []
@@ -697,13 +697,86 @@ def extract_pdf_pages_as_images(pdf_bytes, dpi=150):
             img_bytes = pix.tobytes("png")
             pages.append({
                 "filename": f"page_{i+1:02d}.png",
-                "data": img_bytes
+                "data": img_bytes,
+                "index": i  # 0-based
             })
         doc.close()
         return pages
     except Exception as e:
         print(f"[PDF→Images] Erreur: {e}")
         return []
+
+
+def detect_image_pages_with_gemini(fields, pages_images):
+    """
+    Envoie toutes les pages du PDF à Gemini et lui demande d'identifier
+    sur quelle page se trouve chaque champ image (oui/non) du template FT.
+    Retourne un dict : { "nom_champ": page_index_0based_ou_None }
+    """
+    # Identifier les champs image dans le template
+    image_fields = []
+    for f in fields:
+        if f.get("type") == "champ":
+            vp = [v["valeur"] for v in f.get("valeurs_possibles", [])]
+            if "oui" in vp and "non" in vp:
+                image_fields.append(f["nom"])
+
+    if not image_fields or not pages_images:
+        return {}
+
+    # Construire le prompt
+    fields_list = "\n".join(f"  - {nom}" for nom in image_fields)
+    prompt = f"""Tu reçois les pages d'une fiche technique sous forme d'images (page 1, page 2, etc.).
+
+Pour chacun des champs suivants, indique sur quelle(s) page(s) se trouve le contenu visuel correspondant :
+{fields_list}
+
+Correspondances attendues :
+- visuel_present → section "Visuel" contenant des illustrations/photos du produit (vêtement, équipement...)
+- bareme_mesures_present → section "Barème de mesures" contenant un schéma de mesures + tableau de tailles
+- details_technique_present → section "Détails technique" contenant des schémas techniques détaillés (coutures, poches, bandes...)
+
+RÉPONDS UNIQUEMENT en JSON valide, sans texte autour :
+{{
+  "nom_champ": numero_de_page_entier_base_1_ou_null,
+  ...
+}}
+
+Exemple : {{"visuel_present": 1, "bareme_mesures_present": 4, "details_technique_present": 5}}
+Si un champ n'est pas trouvé, mets null."""
+
+    # Construire les parts : toutes les pages + le prompt
+    content_parts = []
+    for p in pages_images:
+        content_parts.append({"mime_type": "image/png", "data": base64.b64encode(p["data"]).decode()})
+    content_parts.append(prompt)
+
+    try:
+        response = model.generate_content(content_parts)
+        result = clean_json_response(response.text)
+        # Convertir page 1-based → index 0-based
+        mapping = {}
+        for nom in image_fields:
+            val = result.get(nom)
+            if val is not None:
+                try:
+                    mapping[nom] = int(val) - 1  # 0-based
+                except:
+                    mapping[nom] = None
+            else:
+                mapping[nom] = None
+        return mapping
+    except Exception as e:
+        print(f"[detect_image_pages] Erreur: {e}")
+        return {}
+
+
+# Mapping nom_champ → nom de fichier lisible
+FT_IMAGE_NAMES = {
+    "visuel_present": "visuel",
+    "bareme_mesures_present": "bareme_mesures",
+    "details_technique_present": "details_technique",
+}
 
 
 @app.route('/api/extract-ft', methods=['POST'])
@@ -713,7 +786,8 @@ def extract_ft():
     Retourne un ZIP contenant :
       - {stem}_complet.xml
       - {stem}_simple.xml
-      - images/page_01.png, page_02.png, ... (pages du PDF source)
+      - images/visuel.png, images/bareme_mesures.png, images/details_technique.png
+        (seulement les pages pertinentes, nommées par section)
     """
     try:
         source_file = request.files.get('source')
@@ -725,25 +799,40 @@ def extract_ft():
         template_content = template_file.read().decode('utf-8')
         fields, _ = load_xml_template(template_content)
         source_info = load_source_file(source_bytes, source_file.filename)
-        extractions = extract_with_gemini(fields, source_info)
 
+        # 1. Extraction des données textuelles par Gemini
+        extractions = extract_with_gemini(fields, source_info)
         stem = Path(source_file.filename).stem
         xml_complet = fill_xml_complet(template_content, extractions, source_file.filename)
         xml_simple = fill_xml_simple(template_content, extractions)
 
-        # Extraction des pages PDF en images
-        pages_images = []
+        # 2. Extraction pages PDF + détection par Gemini des pages images
+        named_images = []  # list of {"filename": "visuel.png", "data": bytes}
         mime_type, _ = mimetypes.guess_type(source_file.filename)
-        if mime_type == "application/pdf":
-            pages_images = extract_pdf_pages_as_images(source_bytes, dpi=150)
+        if mime_type == "application/pdf" and PYMUPDF_AVAILABLE:
+            pages_images = extract_pdf_pages_as_images(source_bytes, dpi=180)
 
+            if pages_images:
+                # Gemini identifie quelle page = quelle section image
+                page_mapping = detect_image_pages_with_gemini(fields, pages_images)
+                print(f"[extract-ft] Page mapping: {page_mapping}")
+
+                for nom_champ, page_idx in page_mapping.items():
+                    if page_idx is not None and 0 <= page_idx < len(pages_images):
+                        friendly_name = FT_IMAGE_NAMES.get(nom_champ, nom_champ)
+                        named_images.append({
+                            "filename": f"{friendly_name}.png",
+                            "data": pages_images[page_idx]["data"]
+                        })
+
+        # 3. Construction du ZIP
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
         zip_path = Path(tempfile.gettempdir()) / f"argos_ft_{ts}.zip"
         with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
             zf.writestr(f"{stem}_complet.xml", xml_complet)
             zf.writestr(f"{stem}_simple.xml", xml_simple)
-            for page in pages_images:
-                zf.writestr(f"images/{page['filename']}", page['data'])
+            for img in named_images:
+                zf.writestr(f"images/{img['filename']}", img['data'])
 
         return send_file(zip_path, mimetype='application/zip', as_attachment=True, download_name=zip_path.name)
     except Exception as e:
