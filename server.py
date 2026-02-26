@@ -734,28 +734,25 @@ def detect_image_pages_with_gemini(fields, pages_images):
     fields_list = "\n".join(f"  - {nom}" for nom in image_fields)
     prompt = f"""Tu reçois les pages d'une fiche technique (page 1, page 2, etc.).
 
-ATTENTION : une même section peut apparaître sur PLUSIEURS pages (ex: le "Visuel" peut avoir des illustrations sur la page 1 ET sur la page 2). Tu dois les trouver TOUTES.
+RÈGLE FONDAMENTALE : N'IMPORTE QUELLE section peut apparaître sur PLUSIEURS pages.
+Tu dois scanner TOUTES les pages et retourner TOUTES les occurrences de chaque section, pas seulement la première.
 
-Pour chaque champ visuel, retourne la LISTE COMPLÈTE de toutes ses occurrences dans le document.
-Chaque occurrence contient :
-  - page       : numéro de page entier base 1
-  - y_top_pct  : % du haut de la page où commence l'occurrence (titre inclus si premier, sinon contenu)
-  - y_bottom_pct : % du haut de la page où se termine l'occurrence (contenu complet)
+Pour chaque occurrence d'un champ, retourne :
+  - page         : numéro de page entier base 1
+  - y_top_pct    : % vertical où commence l'occurrence sur cette page
+  - y_bottom_pct : % vertical où se termine l'occurrence sur cette page (JUSTE AVANT le prochain titre de section)
 
-RÈGLES :
-- Scanner TOUTES les pages et ne pas s'arrêter à la première occurrence
-- y_bottom_pct doit inclure la totalité du contenu (tableaux complets, dernière illustration...)
-- En cas de doute sur y_bottom_pct, prendre une valeur plus grande
-
-Champs à localiser :
+Champs à localiser (chercher TOUTES leurs occurrences sur TOUTES les pages) :
 {fields_list}
 
 Correspondances :
-- visuel_present → toutes les zones avec illustrations/photos du produit sous un titre "Visuel :". Exclure les tableaux de codes articles.
-- bareme_mesures_present → section "Barème de mesures :" avec schéma + tableau COMPLET.
-- details_technique_present → section "Détails technique :" avec schémas techniques.
+- visuel_present → toute zone avec illustrations/photos du produit sous un titre "Visuel :". Exclure les tableaux de codes articles.
+- bareme_mesures_present → toute zone "Barème de mesures :" avec schéma de mesures + tableau. Peut s'étaler sur plusieurs pages.
+- details_technique_present → toute zone "Détails technique :" avec schémas techniques. Peut s'étaler sur plusieurs pages.
 
-RÉPONDS UNIQUEMENT en JSON valide où chaque valeur est une LISTE d'occurrences :
+FORMAT DE RÉPONSE : chaque champ doit avoir une LISTE, même s'il n'y a qu'une seule occurrence.
+
+RÉPONDS UNIQUEMENT en JSON valide :
 {{
   "nom_champ": [
     {{"page": <int>, "y_top_pct": <float>, "y_bottom_pct": <float>}},
@@ -764,18 +761,23 @@ RÉPONDS UNIQUEMENT en JSON valide où chaque valeur est une LISTE d'occurrences
   ...
 }}
 
-Exemple avec visuel sur 2 pages :
+Exemple où TOUT s'étale sur plusieurs pages :
 {{
   "visuel_present": [
     {{"page": 1, "y_top_pct": 55.0, "y_bottom_pct": 100.0}},
-    {{"page": 2, "y_top_pct": 0.0,  "y_bottom_pct": 55.0}}
+    {{"page": 2, "y_top_pct": 0.0,  "y_bottom_pct": 45.0}}
   ],
   "bareme_mesures_present": [
-    {{"page": 4, "y_top_pct": 0.0, "y_bottom_pct": 100.0}}
+    {{"page": 4, "y_top_pct": 0.0, "y_bottom_pct": 100.0}},
+    {{"page": 5, "y_top_pct": 0.0, "y_bottom_pct": 60.0}}
+  ],
+  "details_technique_present": [
+    {{"page": 5, "y_top_pct": 0.0, "y_bottom_pct": 100.0}},
+    {{"page": 6, "y_top_pct": 0.0, "y_bottom_pct": 100.0}}
   ]
 }}
 
-Si un champ est totalement absent, omets-le du JSON."""
+Si un champ est totalement absent du document, omets-le du JSON."""
 
     content_parts = []
     for p in pages_images:
