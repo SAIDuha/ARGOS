@@ -830,12 +830,74 @@ def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
         return None
 
 
+# Sections qui contiennent des tableaux → on fait un 2e appel Gemini ciblé pour le crop précis
+FT_PRECISE_CROP = {"bareme_mesures_present", "details_technique_present", "visuel_present"}
+
 # Mapping nom_champ → nom de fichier lisible
 FT_IMAGE_NAMES = {
     "visuel_present": "visuel",
     "bareme_mesures_present": "bareme_mesures",
     "details_technique_present": "details_technique",
 }
+
+
+def precise_crop_with_gemini(pdf_bytes, page_index, nom_champ, rough_y_top_pct):
+    """
+    2e passe : envoie uniquement la page concernée à Gemini (haute résolution)
+    et lui demande les coordonnées précises (y_top_pct, y_bottom_pct) de la section.
+    Retourne (y_top_pct, y_bottom_pct) ou None en cas d'échec.
+    """
+    # Descriptions humaines par section
+    section_descriptions = {
+        "visuel_present":          "la section 'Visuel :' contenant les illustrations/photos du produit (vêtement). Elle commence au titre 'Visuel :' et se termine à la dernière illustration, avant toute autre section.",
+        "bareme_mesures_present":  "la section 'Barème de mesures :' contenant le schéma de mesures ET le tableau de mesures par taille. Elle commence au titre et se termine à la DERNIÈRE LIGNE du tableau (incluse), avant toute autre section ou espace vide important.",
+        "details_technique_present": "la section 'Détails technique :' contenant les schémas techniques. Elle commence au titre et se termine au dernier schéma/tableau de cette section.",
+    }
+    description = section_descriptions.get(nom_champ, f"la section correspondant à {nom_champ}")
+
+    # Render la page en haute résolution pour ce 2e appel
+    if not PYMUPDF_AVAILABLE:
+        return None
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page = doc[page_index]
+        mat = fitz.Matrix(200 / 72, 200 / 72)
+        pix = page.get_pixmap(matrix=mat)
+        page_png = pix.tobytes("png")
+        doc.close()
+    except Exception as e:
+        print(f"[precise_crop] Render erreur: {e}")
+        return None
+
+    prompt = f"""Cette image est une page d'une fiche technique.
+
+Localise avec précision {description}.
+
+Donne les coordonnées verticales en pourcentage de la hauteur totale de la page :
+- y_top_pct : % où commence la section (titre inclus, avec une marge de 1% au-dessus)
+- y_bottom_pct : % où se termine la section (dernière ligne/élément inclus, avec une marge de 1% en dessous)
+
+RÈGLES CRITIQUES :
+- Le y_bottom_pct doit inclure la DERNIÈRE LIGNE du tableau ou du dernier élément visible
+- Si la section va jusqu'en bas de la page, mettre 100
+- Ne pas inclure le contenu d'une autre section en dessous
+
+RÉPONDS UNIQUEMENT en JSON :
+{{"y_top_pct": <float>, "y_bottom_pct": <float>}}"""
+
+    try:
+        response = model.generate_content([
+            {"mime_type": "image/png", "data": base64.b64encode(page_png).decode()},
+            prompt
+        ])
+        result = clean_json_response(response.text)
+        y_top    = float(result.get("y_top_pct",    rough_y_top_pct))
+        y_bottom = float(result.get("y_bottom_pct", 100.0))
+        print(f"[precise_crop] {nom_champ} → y_top={y_top}% y_bottom={y_bottom}%")
+        return y_top, y_bottom
+    except Exception as e:
+        print(f"[precise_crop] Erreur Gemini: {e}")
+        return None
 
 
 @app.route('/api/extract-ft', methods=['POST'])
@@ -876,14 +938,19 @@ def extract_ft():
                 print(f"[extract-ft] Page mapping: {page_mapping}")
 
                 for nom_champ, info in page_mapping.items():
-                    page_idx    = info["page"]
-                    y_top_pct   = info["y_top_pct"]
+                    page_idx     = info["page"]
+                    y_top_pct    = info["y_top_pct"]
                     y_bottom_pct = info["y_bottom_pct"]
 
                     if 0 <= page_idx < len(pages_images):
                         friendly_name = FT_IMAGE_NAMES.get(nom_champ, nom_champ)
 
-                        # Crop précis de la section sur la page
+                        # 2e passe Gemini pour crop précis sur toutes les sections
+                        if nom_champ in FT_PRECISE_CROP:
+                            precise = precise_crop_with_gemini(source_bytes, page_idx, nom_champ, y_top_pct)
+                            if precise:
+                                y_top_pct, y_bottom_pct = precise
+
                         cropped = crop_pdf_page(source_bytes, page_idx, y_top_pct, y_bottom_pct, dpi=220)
                         img_data = cropped if cropped else pages_images[page_idx]["data"]
 
