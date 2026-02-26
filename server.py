@@ -734,23 +734,29 @@ def detect_image_pages_with_gemini(fields, pages_images):
     fields_list = "\n".join(f"  - {nom}" for nom in image_fields)
     prompt = f"""Tu reçois les pages d'une fiche technique (page 1, page 2, etc.).
 
-RÈGLE FONDAMENTALE : N'IMPORTE QUELLE section peut apparaître sur PLUSIEURS pages.
-Tu dois scanner TOUTES les pages et retourner TOUTES les occurrences de chaque section, pas seulement la première.
+RÈGLE FONDAMENTALE : N'IMPORTE QUELLE section peut s'étaler sur PLUSIEURS pages consécutives.
+Tu dois scanner TOUTES les pages et retourner TOUTES les occurrences de chaque section.
+
+RÈGLE DE CONTINUITÉ (très importante) :
+Si une section commence sur une page et continue sur la page suivante SANS qu'un nouveau titre de section apparaisse entre les deux, alors c'est la MÊME occurrence qui continue.
+Dans ce cas, crée UNE occurrence par page (même occurrence logique, pages séparées).
+Exemple : le barème de mesures commence page 4 et le tableau se poursuit page 5 sans titre → deux entrées pour bareme_mesures_present (page 4 et page 5).
+Exemple : le visuel a des illustrations page 1 en bas, puis d'autres illustrations page 2 en haut sans titre entre les deux → deux entrées pour visuel_present.
 
 Pour chaque occurrence d'un champ, retourne :
   - page         : numéro de page entier base 1
-  - y_top_pct    : % vertical où commence l'occurrence sur cette page
-  - y_bottom_pct : % vertical où se termine l'occurrence sur cette page (JUSTE AVANT le prochain titre de section)
+  - y_top_pct    : % vertical où commence l'occurrence sur cette page (0 si continuation depuis la page précédente)
+  - y_bottom_pct : % vertical où se termine l'occurrence sur cette page (100 si continue sur la page suivante, sinon juste avant le prochain titre)
 
 Champs à localiser (chercher TOUTES leurs occurrences sur TOUTES les pages) :
 {fields_list}
 
 Correspondances :
-- visuel_present → toute zone avec illustrations/photos du produit sous un titre "Visuel :". Exclure les tableaux de codes articles.
-- bareme_mesures_present → toute zone "Barème de mesures :" avec schéma de mesures + tableau. Peut s'étaler sur plusieurs pages.
-- details_technique_present → toute zone "Détails technique :" avec schémas techniques. Peut s'étaler sur plusieurs pages.
+- visuel_present → toute zone avec illustrations/photos du produit. Exclure les tableaux de codes articles.
+- bareme_mesures_present → toute zone "Barème de mesures :" avec schéma de mesures + tableau.
+- details_technique_present → toute zone "Détails technique :" avec schémas techniques.
 
-FORMAT DE RÉPONSE : chaque champ doit avoir une LISTE, même s'il n'y a qu'une seule occurrence.
+FORMAT : chaque champ doit avoir une LISTE, même s'il n'y a qu'une seule entrée.
 
 RÉPONDS UNIQUEMENT en JSON valide :
 {{
@@ -761,19 +767,19 @@ RÉPONDS UNIQUEMENT en JSON valide :
   ...
 }}
 
-Exemple où TOUT s'étale sur plusieurs pages :
+Exemple complet :
 {{
   "visuel_present": [
     {{"page": 1, "y_top_pct": 55.0, "y_bottom_pct": 100.0}},
     {{"page": 2, "y_top_pct": 0.0,  "y_bottom_pct": 45.0}}
   ],
   "bareme_mesures_present": [
-    {{"page": 4, "y_top_pct": 0.0, "y_bottom_pct": 100.0}},
-    {{"page": 5, "y_top_pct": 0.0, "y_bottom_pct": 60.0}}
+    {{"page": 4, "y_top_pct": 5.0,  "y_bottom_pct": 100.0}},
+    {{"page": 5, "y_top_pct": 0.0,  "y_bottom_pct": 70.0}}
   ],
   "details_technique_present": [
-    {{"page": 5, "y_top_pct": 0.0, "y_bottom_pct": 100.0}},
-    {{"page": 6, "y_top_pct": 0.0, "y_bottom_pct": 100.0}}
+    {{"page": 5, "y_top_pct": 72.0, "y_bottom_pct": 100.0}},
+    {{"page": 6, "y_top_pct": 0.0,  "y_bottom_pct": 100.0}}
   ]
 }}
 
