@@ -813,33 +813,6 @@ Si un champ est totalement absent, omets-le du JSON."""
         return {}
 
 
-def stitch_images_vertically(images_bytes_list, gap=20):
-    """
-    Colle verticalement une liste d'images PNG (bytes) en une seule image.
-    Ajoute un espace blanc de `gap` pixels entre chaque image.
-    Retourne les bytes PNG de l'image finale.
-    """
-    try:
-        from PIL import Image
-        import io
-        imgs = [Image.open(io.BytesIO(b)) for b in images_bytes_list]
-        max_w  = max(im.width  for im in imgs)
-        total_h = sum(im.height for im in imgs) + gap * (len(imgs) - 1)
-        canvas = Image.new("RGB", (max_w, total_h), (255, 255, 255))
-        y_offset = 0
-        for im in imgs:
-            # Centrer horizontalement si largeurs différentes
-            x_offset = (max_w - im.width) // 2
-            canvas.paste(im.convert("RGB"), (x_offset, y_offset))
-            y_offset += im.height + gap
-        buf = io.BytesIO()
-        canvas.save(buf, format="PNG")
-        return buf.getvalue()
-    except Exception as e:
-        print(f"[stitch_images] Erreur: {e}")
-        return images_bytes_list[0] if images_bytes_list else None
-
-
 def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
     """
     Extrait une portion verticale d'une page PDF via PyMuPDF.
@@ -856,13 +829,12 @@ def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
         page_h = rect.height
         page_w = rect.width
 
-        # Marge haute : 15px pour inclure le titre de section
-        # Marge basse : 5% de la hauteur pour s'assurer que rien n'est coupé
-        margin_top_pts    = 15
-        margin_bottom_pct = 5.0
+        # Marge haute : 10px pour inclure le titre de section
+        # Pas de marge basse automatique : precise_crop_with_gemini gère l'arrêt exact
+        margin_top_pts = 10
 
         y_top    = page_h * (y_top_pct / 100.0)
-        y_bottom = page_h * (min(y_bottom_pct + margin_bottom_pct, 100.0) / 100.0)
+        y_bottom = page_h * (y_bottom_pct / 100.0)
 
         clip = fitz.Rect(0, max(0, y_top - margin_top_pts), page_w, min(page_h, y_bottom))
 
@@ -893,15 +865,13 @@ def precise_crop_with_gemini(pdf_bytes, page_index, nom_champ, rough_y_top_pct):
     et lui demande les coordonnées précises (y_top_pct, y_bottom_pct) de la section.
     Retourne (y_top_pct, y_bottom_pct) ou None en cas d'échec.
     """
-    # Descriptions humaines par section
     section_descriptions = {
-        "visuel_present":          "la section 'Visuel :' contenant les illustrations/photos du produit (vêtement). Elle commence au titre 'Visuel :' et se termine à la dernière illustration, avant toute autre section.",
-        "bareme_mesures_present":  "la section 'Barème de mesures :' contenant le schéma de mesures ET le tableau de mesures par taille. Elle commence au titre et se termine à la DERNIÈRE LIGNE du tableau (incluse), avant toute autre section ou espace vide important.",
-        "details_technique_present": "la section 'Détails technique :' contenant les schémas techniques. Elle commence au titre et se termine au dernier schéma/tableau de cette section.",
+        "visuel_present":            "UNIQUEMENT la zone contenant les illustrations/photos du produit (blousons, vêtements...), sous le titre 'Visuel :'. STOP dès qu'un autre titre apparaît (ex: 'Matière :', 'Barème de mesures :', 'Descriptif :', etc.)",
+        "bareme_mesures_present":    "UNIQUEMENT la section 'Barème de mesures :' contenant le schéma de mesures + le tableau de mesures par taille. Inclure toutes les lignes du tableau. STOP dès qu'un autre titre apparaît.",
+        "details_technique_present": "UNIQUEMENT la section 'Détails technique :' contenant les schémas techniques. STOP dès qu'un autre titre apparaît.",
     }
-    description = section_descriptions.get(nom_champ, f"la section correspondant à {nom_champ}")
+    description = section_descriptions.get(nom_champ, f"la section {nom_champ}")
 
-    # Render la page en haute résolution pour ce 2e appel
     if not PYMUPDF_AVAILABLE:
         return None
     try:
@@ -915,18 +885,16 @@ def precise_crop_with_gemini(pdf_bytes, page_index, nom_champ, rough_y_top_pct):
         print(f"[precise_crop] Render erreur: {e}")
         return None
 
-    prompt = f"""Cette image est une page d'une fiche technique.
+    prompt = f"""Tu vois une page de fiche technique.
 
-Localise avec précision {description}.
+Ta tâche : trouver les limites verticales EXACTES de : {description}
 
-Donne les coordonnées verticales en pourcentage de la hauteur totale de la page :
-- y_top_pct : % où commence la section (titre inclus, avec une marge de 1% au-dessus)
-- y_bottom_pct : % où se termine la section (dernière ligne/élément inclus, avec une marge de 1% en dessous)
+Réponds avec :
+- y_top_pct    : % vertical du début (inclure le titre, avec 1% de marge)
+- y_bottom_pct : % vertical de la fin STRICTE du contenu, JUSTE AVANT le prochain titre ou section
 
-RÈGLES CRITIQUES :
-- Le y_bottom_pct doit inclure la DERNIÈRE LIGNE du tableau ou du dernier élément visible
-- Si la section va jusqu'en bas de la page, mettre 100
-- Ne pas inclure le contenu d'une autre section en dessous
+CRITIQUE : y_bottom_pct doit s'arrêter exactement là où le contenu demandé se termine.
+Si juste après il y a "Matière :" ou "Barème de mesures :" ou n'importe quel autre titre, ton y_bottom_pct doit être AVANT ce titre.
 
 RÉPONDS UNIQUEMENT en JSON :
 {{"y_top_pct": <float>, "y_bottom_pct": <float>}}"""
@@ -939,7 +907,7 @@ RÉPONDS UNIQUEMENT en JSON :
         result = clean_json_response(response.text)
         y_top    = float(result.get("y_top_pct",    rough_y_top_pct))
         y_bottom = float(result.get("y_bottom_pct", 100.0))
-        print(f"[precise_crop] {nom_champ} → y_top={y_top}% y_bottom={y_bottom}%")
+        print(f"[precise_crop] {nom_champ} page {page_index+1} → y_top={y_top}% y_bottom={y_bottom}%")
         return y_top, y_bottom
     except Exception as e:
         print(f"[precise_crop] Erreur Gemini: {e}")
@@ -985,9 +953,8 @@ def extract_ft():
 
                 for nom_champ, occurrences in page_mapping.items():
                     friendly_name = FT_IMAGE_NAMES.get(nom_champ, nom_champ)
-                    cropped_parts = []
 
-                    for occ in occurrences:
+                    for i, occ in enumerate(occurrences):
                         page_idx     = occ["page"]
                         y_top_pct    = occ["y_top_pct"]
                         y_bottom_pct = occ["y_bottom_pct"]
@@ -1003,22 +970,12 @@ def extract_ft():
 
                         cropped = crop_pdf_page(source_bytes, page_idx, y_top_pct, y_bottom_pct, dpi=220)
                         if cropped:
-                            cropped_parts.append(cropped)
-
-                    if not cropped_parts:
-                        continue
-
-                    # Si plusieurs occurrences → coller verticalement
-                    if len(cropped_parts) == 1:
-                        img_data = cropped_parts[0]
-                    else:
-                        img_data = stitch_images_vertically(cropped_parts, gap=30)
-
-                    if img_data:
-                        named_images.append({
-                            "filename": f"{friendly_name}.png",
-                            "data": img_data
-                        })
+                            # Un seul visuel → visuel.png, plusieurs → visuel_1.png, visuel_2.png...
+                            suffix = "" if len(occurrences) == 1 else f"_{i+1}"
+                            named_images.append({
+                                "filename": f"{friendly_name}{suffix}.png",
+                                "data": cropped
+                            })
 
         # 3. Construction du ZIP
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
