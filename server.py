@@ -735,16 +735,21 @@ def detect_image_pages_with_gemini(fields, pages_images):
 
 Pour chacun des champs visuels ci-dessous, identifie :
 1. Sur quelle page (numéro entier base 1) se trouve la section
-2. La position verticale EXACTE de la section sur cette page :
-   - y_top_pct  : % du haut de la page où commence la section (ex: 60.0 si la section commence à 60% de la hauteur)
-   - y_bottom_pct : % du haut de la page où se termine la section (ex: 95.0 si elle finit à 95%)
+2. La position verticale de la section sur cette page :
+   - y_top_pct  : % du haut de la page où commence la section (titre inclus)
+   - y_bottom_pct : % du haut de la page où se termine la section
+
+RÈGLES IMPORTANTES pour y_bottom_pct :
+- Inclure TOUJOURS la totalité du contenu (schémas + tableaux complets avec toutes leurs lignes)
+- En cas de doute, prendre une valeur plus grande (ex: 100 si la section va jusqu'en bas)
+- Ne jamais couper un tableau à mi-chemin
 
 Champs à localiser :
 {fields_list}
 
 Correspondances :
-- visuel_present → section titrée "Visuel :" avec illustrations/photos du produit. Ne pas inclure les tableaux de codes articles au-dessus.
-- bareme_mesures_present → section titrée "Barème de mesures :" avec schéma côté + tableau de mesures par taille.
+- visuel_present → section titrée "Visuel :" avec illustrations/photos du produit. Exclure les tableaux de codes articles au-dessus.
+- bareme_mesures_present → section titrée "Barème de mesures :" avec schéma côté + tableau COMPLET de mesures par taille (toutes les lignes du tableau).
 - details_technique_present → section titrée "Détails technique :" avec plans/schémas techniques.
 
 RÉPONDS UNIQUEMENT en JSON valide :
@@ -755,7 +760,7 @@ RÉPONDS UNIQUEMENT en JSON valide :
 
 Exemple :
 {{
-  "visuel_present": {{"page": 1, "y_top_pct": 58.0, "y_bottom_pct": 98.0}},
+  "visuel_present": {{"page": 1, "y_top_pct": 58.0, "y_bottom_pct": 100.0}},
   "bareme_mesures_present": {{"page": 4, "y_top_pct": 0.0, "y_bottom_pct": 100.0}},
   "details_technique_present": {{"page": 5, "y_top_pct": 0.0, "y_bottom_pct": 100.0}}
 }}
@@ -800,18 +805,20 @@ def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         page = doc[page_index]
-        rect = page.rect  # (x0, y0, x1, y1) en points
+        rect = page.rect
 
         page_h = rect.height
         page_w = rect.width
 
-        # Clip = zone à rendre
-        y_top    = page_h * (y_top_pct    / 100.0)
-        y_bottom = page_h * (y_bottom_pct / 100.0)
+        # Marge haute : 15px pour inclure le titre de section
+        # Marge basse : 5% de la hauteur pour s'assurer que rien n'est coupé
+        margin_top_pts    = 15
+        margin_bottom_pct = 5.0
 
-        # Marge de sécurité de 10px pour ne pas couper le titre
-        margin_pts = 10
-        clip = fitz.Rect(0, max(0, y_top - margin_pts), page_w, min(page_h, y_bottom + margin_pts))
+        y_top    = page_h * (y_top_pct / 100.0)
+        y_bottom = page_h * (min(y_bottom_pct + margin_bottom_pct, 100.0) / 100.0)
+
+        clip = fitz.Rect(0, max(0, y_top - margin_top_pts), page_w, min(page_h, y_bottom))
 
         mat = fitz.Matrix(dpi / 72, dpi / 72)
         pix = page.get_pixmap(matrix=mat, clip=clip)
