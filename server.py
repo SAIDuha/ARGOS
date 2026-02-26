@@ -709,14 +709,15 @@ def extract_pdf_pages_as_images(pdf_bytes, dpi=150):
 
 def detect_image_pages_with_gemini(fields, pages_images):
     """
-    Envoie toutes les pages à Gemini qui identifie :
-    - sur quelle page se trouve chaque section image
-    - les coordonnées de crop (y_top_pct et y_bottom_pct, en % de la hauteur de page)
-      pour ne garder que la section concernée, sans le reste de la page.
+    Envoie toutes les pages à Gemini.
+    Pour chaque section image, retourne UNE LISTE d'occurrences (il peut y en avoir plusieurs).
 
     Retourne un dict :
     {
-      "nom_champ": {"page": int_0based, "y_top_pct": float, "y_bottom_pct": float},
+      "nom_champ": [
+        {"page": int_0based, "y_top_pct": float, "y_bottom_pct": float},
+        ...  # autant d'occurrences que nécessaire
+      ],
       ...
     }
     """
@@ -733,39 +734,48 @@ def detect_image_pages_with_gemini(fields, pages_images):
     fields_list = "\n".join(f"  - {nom}" for nom in image_fields)
     prompt = f"""Tu reçois les pages d'une fiche technique (page 1, page 2, etc.).
 
-Pour chacun des champs visuels ci-dessous, identifie :
-1. Sur quelle page (numéro entier base 1) se trouve la section
-2. La position verticale de la section sur cette page :
-   - y_top_pct  : % du haut de la page où commence la section (titre inclus)
-   - y_bottom_pct : % du haut de la page où se termine la section
+ATTENTION : une même section peut apparaître sur PLUSIEURS pages (ex: le "Visuel" peut avoir des illustrations sur la page 1 ET sur la page 2). Tu dois les trouver TOUTES.
 
-RÈGLES IMPORTANTES pour y_bottom_pct :
-- Inclure TOUJOURS la totalité du contenu (schémas + tableaux complets avec toutes leurs lignes)
-- En cas de doute, prendre une valeur plus grande (ex: 100 si la section va jusqu'en bas)
-- Ne jamais couper un tableau à mi-chemin
+Pour chaque champ visuel, retourne la LISTE COMPLÈTE de toutes ses occurrences dans le document.
+Chaque occurrence contient :
+  - page       : numéro de page entier base 1
+  - y_top_pct  : % du haut de la page où commence l'occurrence (titre inclus si premier, sinon contenu)
+  - y_bottom_pct : % du haut de la page où se termine l'occurrence (contenu complet)
+
+RÈGLES :
+- Scanner TOUTES les pages et ne pas s'arrêter à la première occurrence
+- y_bottom_pct doit inclure la totalité du contenu (tableaux complets, dernière illustration...)
+- En cas de doute sur y_bottom_pct, prendre une valeur plus grande
 
 Champs à localiser :
 {fields_list}
 
 Correspondances :
-- visuel_present → section titrée "Visuel :" avec illustrations/photos du produit. Exclure les tableaux de codes articles au-dessus.
-- bareme_mesures_present → section titrée "Barème de mesures :" avec schéma côté + tableau COMPLET de mesures par taille (toutes les lignes du tableau).
-- details_technique_present → section titrée "Détails technique :" avec plans/schémas techniques.
+- visuel_present → toutes les zones avec illustrations/photos du produit sous un titre "Visuel :". Exclure les tableaux de codes articles.
+- bareme_mesures_present → section "Barème de mesures :" avec schéma + tableau COMPLET.
+- details_technique_present → section "Détails technique :" avec schémas techniques.
 
-RÉPONDS UNIQUEMENT en JSON valide :
+RÉPONDS UNIQUEMENT en JSON valide où chaque valeur est une LISTE d'occurrences :
 {{
-  "nom_champ": {{"page": <int>, "y_top_pct": <float>, "y_bottom_pct": <float>}},
+  "nom_champ": [
+    {{"page": <int>, "y_top_pct": <float>, "y_bottom_pct": <float>}},
+    {{"page": <int>, "y_top_pct": <float>, "y_bottom_pct": <float>}}
+  ],
   ...
 }}
 
-Exemple :
+Exemple avec visuel sur 2 pages :
 {{
-  "visuel_present": {{"page": 1, "y_top_pct": 58.0, "y_bottom_pct": 100.0}},
-  "bareme_mesures_present": {{"page": 4, "y_top_pct": 0.0, "y_bottom_pct": 100.0}},
-  "details_technique_present": {{"page": 5, "y_top_pct": 0.0, "y_bottom_pct": 100.0}}
+  "visuel_present": [
+    {{"page": 1, "y_top_pct": 55.0, "y_bottom_pct": 100.0}},
+    {{"page": 2, "y_top_pct": 0.0,  "y_bottom_pct": 55.0}}
+  ],
+  "bareme_mesures_present": [
+    {{"page": 4, "y_top_pct": 0.0, "y_bottom_pct": 100.0}}
+  ]
 }}
 
-Si un champ est absent, omets-le du JSON."""
+Si un champ est totalement absent, omets-le du JSON."""
 
     content_parts = []
     for p in pages_images:
@@ -778,20 +788,56 @@ Si un champ est absent, omets-le du JSON."""
         mapping = {}
         for nom in image_fields:
             val = result.get(nom)
-            if val and isinstance(val, dict) and val.get("page") is not None:
-                try:
-                    mapping[nom] = {
-                        "page": int(val["page"]) - 1,  # 0-based
-                        "y_top_pct": float(val.get("y_top_pct", 0)),
-                        "y_bottom_pct": float(val.get("y_bottom_pct", 100))
-                    }
-                except Exception as e:
-                    print(f"[detect_image_pages] Parse error pour {nom}: {e}")
+            if not val:
+                continue
+            # Normaliser : accepter un dict seul ou une liste
+            if isinstance(val, dict):
+                val = [val]
+            occurrences = []
+            for item in val:
+                if isinstance(item, dict) and item.get("page") is not None:
+                    try:
+                        occurrences.append({
+                            "page":         int(item["page"]) - 1,  # 0-based
+                            "y_top_pct":    float(item.get("y_top_pct",    0)),
+                            "y_bottom_pct": float(item.get("y_bottom_pct", 100))
+                        })
+                    except Exception as e:
+                        print(f"[detect_image_pages] Parse error pour {nom}: {e}")
+            if occurrences:
+                mapping[nom] = occurrences
         print(f"[detect_image_pages] Résultat Gemini: {mapping}")
         return mapping
     except Exception as e:
         print(f"[detect_image_pages] Erreur: {e}")
         return {}
+
+
+def stitch_images_vertically(images_bytes_list, gap=20):
+    """
+    Colle verticalement une liste d'images PNG (bytes) en une seule image.
+    Ajoute un espace blanc de `gap` pixels entre chaque image.
+    Retourne les bytes PNG de l'image finale.
+    """
+    try:
+        from PIL import Image
+        import io
+        imgs = [Image.open(io.BytesIO(b)) for b in images_bytes_list]
+        max_w  = max(im.width  for im in imgs)
+        total_h = sum(im.height for im in imgs) + gap * (len(imgs) - 1)
+        canvas = Image.new("RGB", (max_w, total_h), (255, 255, 255))
+        y_offset = 0
+        for im in imgs:
+            # Centrer horizontalement si largeurs différentes
+            x_offset = (max_w - im.width) // 2
+            canvas.paste(im.convert("RGB"), (x_offset, y_offset))
+            y_offset += im.height + gap
+        buf = io.BytesIO()
+        canvas.save(buf, format="PNG")
+        return buf.getvalue()
+    except Exception as e:
+        print(f"[stitch_images] Erreur: {e}")
+        return images_bytes_list[0] if images_bytes_list else None
 
 
 def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
@@ -937,23 +983,38 @@ def extract_ft():
                 page_mapping = detect_image_pages_with_gemini(fields, pages_images)
                 print(f"[extract-ft] Page mapping: {page_mapping}")
 
-                for nom_champ, info in page_mapping.items():
-                    page_idx     = info["page"]
-                    y_top_pct    = info["y_top_pct"]
-                    y_bottom_pct = info["y_bottom_pct"]
+                for nom_champ, occurrences in page_mapping.items():
+                    friendly_name = FT_IMAGE_NAMES.get(nom_champ, nom_champ)
+                    cropped_parts = []
 
-                    if 0 <= page_idx < len(pages_images):
-                        friendly_name = FT_IMAGE_NAMES.get(nom_champ, nom_champ)
+                    for occ in occurrences:
+                        page_idx     = occ["page"]
+                        y_top_pct    = occ["y_top_pct"]
+                        y_bottom_pct = occ["y_bottom_pct"]
 
-                        # 2e passe Gemini pour crop précis sur toutes les sections
+                        if not (0 <= page_idx < len(pages_images)):
+                            continue
+
+                        # 2e passe Gemini pour crop précis
                         if nom_champ in FT_PRECISE_CROP:
                             precise = precise_crop_with_gemini(source_bytes, page_idx, nom_champ, y_top_pct)
                             if precise:
                                 y_top_pct, y_bottom_pct = precise
 
                         cropped = crop_pdf_page(source_bytes, page_idx, y_top_pct, y_bottom_pct, dpi=220)
-                        img_data = cropped if cropped else pages_images[page_idx]["data"]
+                        if cropped:
+                            cropped_parts.append(cropped)
 
+                    if not cropped_parts:
+                        continue
+
+                    # Si plusieurs occurrences → coller verticalement
+                    if len(cropped_parts) == 1:
+                        img_data = cropped_parts[0]
+                    else:
+                        img_data = stitch_images_vertically(cropped_parts, gap=30)
+
+                    if img_data:
                         named_images.append({
                             "filename": f"{friendly_name}.png",
                             "data": img_data
