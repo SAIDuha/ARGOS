@@ -10,6 +10,11 @@ from pathlib import Path
 from datetime import datetime
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
+try:
+    import fitz  # pymupdf
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
 from flask import Flask, request, send_file, send_from_directory, jsonify, session, redirect
 from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -673,6 +678,77 @@ def extract():
             zf.writestr(f"{stem}_simple.xml", xml_simple)
         return send_file(zip_path, mimetype='application/zip', as_attachment=True, download_name=zip_path.name)
     except Exception as e:
+        return {"error": str(e)}, 500
+
+
+def extract_pdf_pages_as_images(pdf_bytes, dpi=150):
+    """
+    Extrait chaque page d'un PDF en image PNG.
+    Retourne une liste de dicts : {"filename": "page_01.png", "data": bytes}
+    """
+    if not PYMUPDF_AVAILABLE:
+        return []
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pages = []
+        mat = fitz.Matrix(dpi / 72, dpi / 72)
+        for i, page in enumerate(doc):
+            pix = page.get_pixmap(matrix=mat)
+            img_bytes = pix.tobytes("png")
+            pages.append({
+                "filename": f"page_{i+1:02d}.png",
+                "data": img_bytes
+            })
+        doc.close()
+        return pages
+    except Exception as e:
+        print(f"[PDF→Images] Erreur: {e}")
+        return []
+
+
+@app.route('/api/extract-ft', methods=['POST'])
+def extract_ft():
+    """
+    Endpoint dédié aux Fiches Techniques.
+    Retourne un ZIP contenant :
+      - {stem}_complet.xml
+      - {stem}_simple.xml
+      - images/page_01.png, page_02.png, ... (pages du PDF source)
+    """
+    try:
+        source_file = request.files.get('source')
+        template_file = request.files.get('template')
+        if not source_file or not template_file:
+            return {"error": "Fichiers requis"}, 400
+
+        source_bytes = source_file.read()
+        template_content = template_file.read().decode('utf-8')
+        fields, _ = load_xml_template(template_content)
+        source_info = load_source_file(source_bytes, source_file.filename)
+        extractions = extract_with_gemini(fields, source_info)
+
+        stem = Path(source_file.filename).stem
+        xml_complet = fill_xml_complet(template_content, extractions, source_file.filename)
+        xml_simple = fill_xml_simple(template_content, extractions)
+
+        # Extraction des pages PDF en images
+        pages_images = []
+        mime_type, _ = mimetypes.guess_type(source_file.filename)
+        if mime_type == "application/pdf":
+            pages_images = extract_pdf_pages_as_images(source_bytes, dpi=150)
+
+        ts = datetime.now().strftime('%Y%m%d_%H%M%S')
+        zip_path = Path(tempfile.gettempdir()) / f"argos_ft_{ts}.zip"
+        with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr(f"{stem}_complet.xml", xml_complet)
+            zf.writestr(f"{stem}_simple.xml", xml_simple)
+            for page in pages_images:
+                zf.writestr(f"images/{page['filename']}", page['data'])
+
+        return send_file(zip_path, mimetype='application/zip', as_attachment=True, download_name=zip_path.name)
+    except Exception as e:
+        print(f"[extract-ft] Erreur: {e}")
+        import traceback; traceback.print_exc()
         return {"error": str(e)}, 500
 
 
