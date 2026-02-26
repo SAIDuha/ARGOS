@@ -229,7 +229,121 @@
             z-index: 10;
         }
 
-        /* ─ Onglets de mode ─ */
+        /* ══════════════════════════════════════
+           FT MODE — AMBIANCE NETEXIAL
+           Fond bleu foncé complémentaire #1C3775
+           Action strip orange contrastant #FC6100
+        ══════════════════════════════════════ */
+
+        /* Fond : bleu foncé complémentaire (palette principale Netexial) */
+        body.ft-mode {
+            background: var(--navy-mid); /* #1C3775 */
+        }
+
+        /* Robot plus discret sur fond sombre */
+        body.ft-mode .robot-bg {
+            filter: drop-shadow(-20px 0 60px rgba(20,27,77,0.5)) brightness(0.45) saturate(0.6);
+        }
+
+        /* Bande latérale : orange — signature Netexial, inchangée */
+
+        /* Header navy plus foncé, accent orange pleine largeur */
+        body.ft-mode .site-header {
+            background: var(--navy-dark);
+            box-shadow: 0 2px 24px rgba(20,27,77,0.6);
+        }
+        body.ft-mode .site-header::after {
+            background: var(--orange);
+            background: linear-gradient(90deg, var(--orange), var(--orange));
+        }
+        body.ft-mode .header-sub { color: var(--blue-med); }
+        body.ft-mode .header-tag {
+            color: var(--white);
+            border-color: rgba(255,255,255,0.4);
+        }
+
+        /* Onglets sur fond bleu foncé */
+        body.ft-mode .tab-btn {
+            background: rgba(20,27,77,0.35);
+            color: var(--blue-med);
+        }
+        body.ft-mode .tab-btn:hover {
+            background: rgba(20,27,77,0.55);
+            color: var(--white);
+            opacity: 1;
+        }
+        /* Onglet FT actif : orange contrastant sur blanc, signature forte */
+        body.ft-mode .tab-btn.active {
+            background: var(--white);
+            color: var(--navy);
+            opacity: 1;
+        }
+        body.ft-mode .tab-btn.active::after {
+            background: var(--orange);
+        }
+
+        /* Panneau principal : blanc — conforme charte (fond clair pour contenu) */
+        body.ft-mode .main-panel {
+            background: var(--white);
+            box-shadow: 0 -6px 48px rgba(20,27,77,0.35);
+        }
+        body.ft-mode .main-panel::before {
+            background: var(--orange); /* ligne top orange */
+            height: 4px;
+        }
+
+        /* Textes panel — inchangés (navy sur blanc) */
+        body.ft-mode .panel-eyebrow { color: var(--orange); }
+        body.ft-mode .panel-title   { color: var(--navy); }
+
+        /* ─ ACTION STRIP : orange contrastant plein ─
+           Conforme charte : orange utilisé pour mettre en avant,
+           "couleur d'icône" et accent fort */
+        body.ft-mode .action-strip {
+            background: var(--orange);
+            border-top: none;
+            box-shadow: 0 -2px 20px rgba(252,97,0,0.4);
+        }
+        body.ft-mode .action-label {
+            color: var(--white);
+            opacity: 0.9;
+        }
+
+        /* Bouton lancer sur fond orange → navy pour contraste */
+        body.ft-mode .teal-btn {
+            background: var(--navy);
+            border-color: var(--navy);
+            color: var(--white);
+        }
+        body.ft-mode .teal-btn:not(:disabled):hover {
+            background: var(--navy-mid);
+            border-color: var(--navy-mid);
+        }
+
+        /* Feedback zone sous l'orange */
+        body.ft-mode .feedback-zone {
+            background: var(--navy-dark);
+            border-top: 3px solid var(--orange);
+        }
+        body.ft-mode .status-block.wait .status-ico span {
+            border-top-color: var(--white);
+        }
+
+        /* Hero sur fond bleu foncé — logo blanc autorisé (charte p.4) */
+        body.ft-mode .argos-title        { color: var(--white); }
+        body.ft-mode .label-bar          { background: var(--orange); }
+        body.ft-mode .label-text         { color: var(--blue-light); }
+        body.ft-mode .divider-line-short { background: var(--orange); }
+        body.ft-mode .divider-tagline    { color: var(--blue-light); }
+        body.ft-mode .hero-tag-block     { background: var(--orange); }
+        body.ft-mode .hero-desc          { color: var(--blue-med); }
+
+        /* Transitions */
+        body, .main-panel, .action-strip, .tab-btn,
+        .argos-title, .site-header, .feedback-zone {
+            transition: background 0.35s ease, color 0.3s ease,
+                        border-color 0.3s ease, box-shadow 0.35s ease;
+        }
         .tabs-row {
             display: flex;
             padding-left: 56px;
@@ -891,6 +1005,9 @@ function switchMode(m){
     $('emailAnalyzeBtn').hidden=m!=='email';
     $('ftAnalyzeBtn').hidden=m!=='ft';
     $('feedbackZone').hidden=true;
+    // FT mode ambiance
+    document.body.classList.toggle('ft-mode', m==='ft');
+    document.querySelector('.robot-bg').src = m==='ft' ? 'robotft.png' : 'robot.png';
 }
 function drops(){
     sd($('sourceDropZone'),f=>hf('source',f));
