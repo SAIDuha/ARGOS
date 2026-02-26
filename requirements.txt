@@ -12,3 +12,4 @@ google-api-python-client
 pyzbar
 Pillow>=10.0.0
 pdf2image>=1.16.3
+pymupdf
