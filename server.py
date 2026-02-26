@@ -709,11 +709,17 @@ def extract_pdf_pages_as_images(pdf_bytes, dpi=150):
 
 def detect_image_pages_with_gemini(fields, pages_images):
     """
-    Envoie toutes les pages du PDF à Gemini et lui demande d'identifier
-    sur quelle page se trouve chaque champ image (oui/non) du template FT.
-    Retourne un dict : { "nom_champ": page_index_0based_ou_None }
+    Envoie toutes les pages à Gemini qui identifie :
+    - sur quelle page se trouve chaque section image
+    - les coordonnées de crop (y_top_pct et y_bottom_pct, en % de la hauteur de page)
+      pour ne garder que la section concernée, sans le reste de la page.
+
+    Retourne un dict :
+    {
+      "nom_champ": {"page": int_0based, "y_top_pct": float, "y_bottom_pct": float},
+      ...
+    }
     """
-    # Identifier les champs image dans le template
     image_fields = []
     for f in fields:
         if f.get("type") == "champ":
@@ -724,28 +730,38 @@ def detect_image_pages_with_gemini(fields, pages_images):
     if not image_fields or not pages_images:
         return {}
 
-    # Construire le prompt
     fields_list = "\n".join(f"  - {nom}" for nom in image_fields)
-    prompt = f"""Tu reçois les pages d'une fiche technique sous forme d'images (page 1, page 2, etc.).
+    prompt = f"""Tu reçois les pages d'une fiche technique (page 1, page 2, etc.).
 
-Pour chacun des champs suivants, indique sur quelle(s) page(s) se trouve le contenu visuel correspondant :
+Pour chacun des champs visuels ci-dessous, identifie :
+1. Sur quelle page (numéro entier base 1) se trouve la section
+2. La position verticale EXACTE de la section sur cette page :
+   - y_top_pct  : % du haut de la page où commence la section (ex: 60.0 si la section commence à 60% de la hauteur)
+   - y_bottom_pct : % du haut de la page où se termine la section (ex: 95.0 si elle finit à 95%)
+
+Champs à localiser :
 {fields_list}
 
-Correspondances attendues :
-- visuel_present → section "Visuel" contenant des illustrations/photos du produit (vêtement, équipement...)
-- bareme_mesures_present → section "Barème de mesures" contenant un schéma de mesures + tableau de tailles
-- details_technique_present → section "Détails technique" contenant des schémas techniques détaillés (coutures, poches, bandes...)
+Correspondances :
+- visuel_present → section titrée "Visuel :" avec illustrations/photos du produit. Ne pas inclure les tableaux de codes articles au-dessus.
+- bareme_mesures_present → section titrée "Barème de mesures :" avec schéma côté + tableau de mesures par taille.
+- details_technique_present → section titrée "Détails technique :" avec plans/schémas techniques.
 
-RÉPONDS UNIQUEMENT en JSON valide, sans texte autour :
+RÉPONDS UNIQUEMENT en JSON valide :
 {{
-  "nom_champ": numero_de_page_entier_base_1_ou_null,
+  "nom_champ": {{"page": <int>, "y_top_pct": <float>, "y_bottom_pct": <float>}},
   ...
 }}
 
-Exemple : {{"visuel_present": 1, "bareme_mesures_present": 4, "details_technique_present": 5}}
-Si un champ n'est pas trouvé, mets null."""
+Exemple :
+{{
+  "visuel_present": {{"page": 1, "y_top_pct": 58.0, "y_bottom_pct": 98.0}},
+  "bareme_mesures_present": {{"page": 4, "y_top_pct": 0.0, "y_bottom_pct": 100.0}},
+  "details_technique_present": {{"page": 5, "y_top_pct": 0.0, "y_bottom_pct": 100.0}}
+}}
 
-    # Construire les parts : toutes les pages + le prompt
+Si un champ est absent, omets-le du JSON."""
+
     content_parts = []
     for p in pages_images:
         content_parts.append({"mime_type": "image/png", "data": base64.b64encode(p["data"]).decode()})
@@ -754,21 +770,57 @@ Si un champ n'est pas trouvé, mets null."""
     try:
         response = model.generate_content(content_parts)
         result = clean_json_response(response.text)
-        # Convertir page 1-based → index 0-based
         mapping = {}
         for nom in image_fields:
             val = result.get(nom)
-            if val is not None:
+            if val and isinstance(val, dict) and val.get("page") is not None:
                 try:
-                    mapping[nom] = int(val) - 1  # 0-based
-                except:
-                    mapping[nom] = None
-            else:
-                mapping[nom] = None
+                    mapping[nom] = {
+                        "page": int(val["page"]) - 1,  # 0-based
+                        "y_top_pct": float(val.get("y_top_pct", 0)),
+                        "y_bottom_pct": float(val.get("y_bottom_pct", 100))
+                    }
+                except Exception as e:
+                    print(f"[detect_image_pages] Parse error pour {nom}: {e}")
+        print(f"[detect_image_pages] Résultat Gemini: {mapping}")
         return mapping
     except Exception as e:
         print(f"[detect_image_pages] Erreur: {e}")
         return {}
+
+
+def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
+    """
+    Extrait une portion verticale d'une page PDF via PyMuPDF.
+    y_top_pct et y_bottom_pct sont des pourcentages (0–100) de la hauteur de page.
+    Retourne les bytes PNG de la zone croppée.
+    """
+    if not PYMUPDF_AVAILABLE:
+        return None
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page = doc[page_index]
+        rect = page.rect  # (x0, y0, x1, y1) en points
+
+        page_h = rect.height
+        page_w = rect.width
+
+        # Clip = zone à rendre
+        y_top    = page_h * (y_top_pct    / 100.0)
+        y_bottom = page_h * (y_bottom_pct / 100.0)
+
+        # Marge de sécurité de 10px pour ne pas couper le titre
+        margin_pts = 10
+        clip = fitz.Rect(0, max(0, y_top - margin_pts), page_w, min(page_h, y_bottom + margin_pts))
+
+        mat = fitz.Matrix(dpi / 72, dpi / 72)
+        pix = page.get_pixmap(matrix=mat, clip=clip)
+        img_bytes = pix.tobytes("png")
+        doc.close()
+        return img_bytes
+    except Exception as e:
+        print(f"[crop_pdf_page] Erreur: {e}")
+        return None
 
 
 # Mapping nom_champ → nom de fichier lisible
@@ -806,23 +858,31 @@ def extract_ft():
         xml_complet = fill_xml_complet(template_content, extractions, source_file.filename)
         xml_simple = fill_xml_simple(template_content, extractions)
 
-        # 2. Extraction pages PDF + détection par Gemini des pages images
-        named_images = []  # list of {"filename": "visuel.png", "data": bytes}
+        # 2. Extraction pages PDF + détection par Gemini + crop précis
+        named_images = []
         mime_type, _ = mimetypes.guess_type(source_file.filename)
         if mime_type == "application/pdf" and PYMUPDF_AVAILABLE:
-            pages_images = extract_pdf_pages_as_images(source_bytes, dpi=180)
+            pages_images = extract_pdf_pages_as_images(source_bytes, dpi=150)
 
             if pages_images:
-                # Gemini identifie quelle page = quelle section image
                 page_mapping = detect_image_pages_with_gemini(fields, pages_images)
                 print(f"[extract-ft] Page mapping: {page_mapping}")
 
-                for nom_champ, page_idx in page_mapping.items():
-                    if page_idx is not None and 0 <= page_idx < len(pages_images):
+                for nom_champ, info in page_mapping.items():
+                    page_idx    = info["page"]
+                    y_top_pct   = info["y_top_pct"]
+                    y_bottom_pct = info["y_bottom_pct"]
+
+                    if 0 <= page_idx < len(pages_images):
                         friendly_name = FT_IMAGE_NAMES.get(nom_champ, nom_champ)
+
+                        # Crop précis de la section sur la page
+                        cropped = crop_pdf_page(source_bytes, page_idx, y_top_pct, y_bottom_pct, dpi=220)
+                        img_data = cropped if cropped else pages_images[page_idx]["data"]
+
                         named_images.append({
                             "filename": f"{friendly_name}.png",
-                            "data": pages_images[page_idx]["data"]
+                            "data": img_data
                         })
 
         # 3. Construction du ZIP
