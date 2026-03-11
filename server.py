@@ -751,10 +751,12 @@ Pour chaque occurrence d'un champ, retourne :
 Champs à localiser (chercher TOUTES leurs occurrences sur TOUTES les pages) :
 {fields_list}
 
-Correspondances :
-- visuel_present → toute zone avec illustrations/photos du produit. Exclure les tableaux de codes articles.
-- bareme_mesures_present → toute zone "Barème de mesures :" avec schéma de mesures + tableau.
-- details_technique_present → toute zone "Détails technique :" avec schémas techniques.
+Correspondances (LIS ATTENTIVEMENT — la distinction est CRUCIALE) :
+- visuel_present → zone titrée "Visuel :" (ou sans titre) montrant les VARIANTES COLORIS du produit (ex: 3 blousons côte à côte avec légendes "Jaune HV / Gris", "Jaune HV / Marine"...). Pas de cotes, pas de flèches techniques, pas d'annotations de mesure. C'est une vue "catalogue" propre.
+- bareme_mesures_present → zone titrée "Barème de mesures :" avec schéma de mesures + tableau de tailles.
+- details_technique_present → zone titrée "Détails technique :" montrant des SCHÉMAS TECHNIQUES avec cotes (flèches rouges/bleues), annotations de mesure (mm, cm), détails de couture, zooms sur des éléments (col, poches, fermetures). Même si le produit est un blouson comme le visuel, la présence de COTES et ANNOTATIONS TECHNIQUES = details_technique, PAS visuel.
+
+RÈGLE CLÉ : Si tu vois des flèches de cotation, des mesures en mm/cm, des zooms de détails constructifs → c'est details_technique_present, JAMAIS visuel_present.
 
 FORMAT : chaque champ doit avoir une LISTE, même s'il n'y a qu'une seule entrée.
 
@@ -874,9 +876,9 @@ def precise_crop_with_gemini(pdf_bytes, page_index, nom_champ, rough_y_top_pct):
     Retourne (y_top_pct, y_bottom_pct) ou None en cas d'échec.
     """
     section_descriptions = {
-        "visuel_present":            "UNIQUEMENT la zone contenant les illustrations/photos du produit (blousons, vêtements...), sous le titre 'Visuel :'. STOP dès qu'un autre titre apparaît (ex: 'Matière :', 'Barème de mesures :', 'Descriptif :', etc.)",
+        "visuel_present":            "UNIQUEMENT la zone contenant les illustrations/photos des variantes coloris du produit, sous le titre 'Visuel :'. STOP IMMÉDIATEMENT dès que tu vois un titre de section suivant comme 'Matière :', 'Barème de mesures :', 'Descriptif :', 'Détails technique :', 'Codes articles :' etc. Le y_bottom_pct doit être AVANT la première lettre du titre suivant, avec 1% de marge AVANT.",
         "bareme_mesures_present":    "UNIQUEMENT la section 'Barème de mesures :' contenant le schéma de mesures + le tableau de mesures par taille. Inclure toutes les lignes du tableau. STOP dès qu'un autre titre apparaît.",
-        "details_technique_present": "UNIQUEMENT la section 'Détails technique :' contenant les schémas techniques. STOP dès qu'un autre titre apparaît.",
+        "details_technique_present": "UNIQUEMENT la section 'Détails technique :' contenant les schémas techniques avec cotes et annotations. STOP dès qu'un autre titre apparaît.",
     }
     description = section_descriptions.get(nom_champ, f"la section {nom_champ}")
 
@@ -898,11 +900,15 @@ def precise_crop_with_gemini(pdf_bytes, page_index, nom_champ, rough_y_top_pct):
 Ta tâche : trouver les limites verticales EXACTES de : {description}
 
 Réponds avec :
-- y_top_pct    : % vertical du début (inclure le titre, avec 1% de marge)
-- y_bottom_pct : % vertical de la fin STRICTE du contenu, JUSTE AVANT le prochain titre ou section
+- y_top_pct    : % vertical du début (inclure le titre, avec 1% de marge au dessus)
+- y_bottom_pct : % vertical de la fin STRICTE du contenu
 
-CRITIQUE : y_bottom_pct doit s'arrêter exactement là où le contenu demandé se termine.
-Si juste après il y a "Matière :" ou "Barème de mesures :" ou n'importe quel autre titre, ton y_bottom_pct doit être AVANT ce titre.
+CRITIQUE — RÈGLE DE COUPURE :
+1. Scanne la page de haut en bas.
+2. Repère TOUS les titres de section (texte coloré ou en gras suivi de ":" comme "Visuel :", "Matière :", "Barème de mesures :", "Détails technique :", "Descriptif :", "Codes articles :").
+3. Le y_bottom_pct DOIT être 1-2% AVANT le titre de la section suivante.
+4. Si le mot "Matière" apparaît sous le visuel, ton y_bottom_pct doit être AU DESSUS de ce mot.
+5. En cas de doute, coupe PLUS HAUT plutôt que trop bas.
 
 RÉPONDS UNIQUEMENT en JSON :
 {{"y_top_pct": <float>, "y_bottom_pct": <float>}}"""
@@ -915,6 +921,9 @@ RÉPONDS UNIQUEMENT en JSON :
         result = clean_json_response(response.text)
         y_top    = float(result.get("y_top_pct",    rough_y_top_pct))
         y_bottom = float(result.get("y_bottom_pct", 100.0))
+        # Marge de sécurité : retirer 1.5% en bas pour ne jamais inclure le titre suivant
+        if y_bottom < 100.0:
+            y_bottom = max(y_top + 5, y_bottom - 1.5)
         print(f"[precise_crop] {nom_champ} page {page_index+1} → y_top={y_top}% y_bottom={y_bottom}%")
         return y_top, y_bottom
     except Exception as e:
