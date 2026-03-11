@@ -762,7 +762,10 @@ def detect_sections_by_text(pdf_bytes):
                     line_text += span["text"]
                     max_font_size = max(max_font_size, span.get("size", 0))
 
-                cleaned = line_text.strip().rstrip(":").strip().lower()
+                # Normaliser unicode (espaces insécables, accents composés, etc.)
+                import unicodedata
+                cleaned = unicodedata.normalize("NFKC", line_text)
+                cleaned = cleaned.strip().rstrip(":").strip().lower()
                 if not cleaned:
                     continue
 
@@ -797,36 +800,13 @@ def detect_sections_by_text(pdf_bytes):
     doc.close()
 
     if not all_titles:
+        print("[detect_sections_by_text] Aucun titre trouvé dans le PDF")
         return []
 
     # Trier par (page, y_top)
     all_titles.sort(key=lambda t: (t["page"], t["y_top"]))
     titles_debug = [(t["raw_title"], "p%d" % (t["page"]+1), "y=%.1f" % t["y_top"], "fs=%.1f" % t["font_size"]) for t in all_titles]
     print(f"[detect_sections_by_text] Titres bruts trouvés: {titles_debug}")
-
-    # ── FILTRE TABLE DES MATIÈRES ──
-    # Si 3+ titres connus (sections + séparateurs) sont groupés dans un rayon de 80pts
-    # sur la même page, c'est une table des matières → on les ignore tous
-    toc_indices = set()
-    for i, t in enumerate(all_titles):
-        cluster = [i]
-        for j in range(i + 1, len(all_titles)):
-            if all_titles[j]["page"] != t["page"]:
-                break
-            if all_titles[j]["y_top"] - t["y_top"] <= 80:
-                cluster.append(j)
-            else:
-                break
-        if len(cluster) >= 3:
-            toc_indices.update(cluster)
-
-    if toc_indices:
-        removed = [all_titles[i]["raw_title"] for i in toc_indices]
-        print(f"[detect_sections_by_text] Filtrés (TOC probable): {removed}")
-        all_titles = [t for i, t in enumerate(all_titles) if i not in toc_indices]
-
-    if not all_titles:
-        return []
 
     # ── CONSTRUCTION DES SECTIONS ──
     sections = []
