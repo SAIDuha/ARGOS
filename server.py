@@ -808,49 +808,94 @@ def detect_sections_by_text(pdf_bytes):
     titles_debug = [(t["raw_title"], "p%d" % (t["page"]+1), "y=%.1f" % t["y_top"], "fs=%.1f" % t["font_size"]) for t in all_titles]
     print(f"[detect_sections_by_text] Titres bruts trouvés: {titles_debug}")
 
-    # ── CONSTRUCTION DES SECTIONS ──
-    sections = []
+    # ── CONSTRUCTION DES SECTIONS (multi-page aware) ──
+    # Pour chaque titre de section, on cherche le prochain titre DANS TOUT LE DOCUMENT
+    # et on génère un crop par page entre les deux.
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    num_pages = len(doc)
+    page_heights = {i: doc[i].rect.height for i in range(num_pages)}
+    doc.close()
+
+    sections = []  # {"field", "crops": [{"page", "y_top", "y_bottom"}, ...]}
+
     for i, title in enumerate(all_titles):
         if title["field"].startswith("_separator_"):
-            continue  # Sert uniquement de borne basse
-
-        # Borne basse = prochain titre (section OU séparateur) sur la même page, ou fin de page
-        y_bottom = title["page_height"]
-        for j in range(i + 1, len(all_titles)):
-            nxt = all_titles[j]
-            if nxt["page"] == title["page"]:
-                y_bottom = nxt["y_top"] - 5
-                break
-            elif nxt["page"] > title["page"]:
-                break
-
-        section_height = y_bottom - title["y_top"]
-        if section_height < 40:
-            print(f"[detect_sections_by_text] Section trop petite, ignorée: {title['raw_title']} ({section_height:.0f}pts)")
             continue
 
-        sections.append({
-            "field": title["field"],
-            "page": title["page"],
-            "y_top": max(0, title["y_top"] - 5),
-            "y_bottom": y_bottom,
-            "page_height": title["page_height"],
-        })
+        # Trouver le PROCHAIN titre dans le document (section ou séparateur)
+        next_title = None
+        for j in range(i + 1, len(all_titles)):
+            next_title = all_titles[j]
+            break
+
+        start_page = title["page"]
+        start_y = title["y_top"]
+
+        if next_title and next_title["page"] == start_page:
+            # Cas simple : prochain titre sur la même page
+            end_page = start_page
+            end_y = next_title["y_top"] - 5
+        elif next_title and next_title["page"] > start_page:
+            # Multi-page : la section va de cette page jusqu'à la page du prochain titre
+            end_page = next_title["page"]
+            end_y = next_title["y_top"] - 5
+        else:
+            # Dernier titre du document : va jusqu'en fin de page
+            end_page = start_page
+            end_y = title["page_height"]
+
+        # Générer les crops page par page
+        crops = []
+        for pg in range(start_page, end_page + 1):
+            if pg >= num_pages:
+                break
+            pg_height = page_heights.get(pg, title["page_height"])
+
+            if pg == start_page and pg == end_page:
+                # Tout sur une page
+                crop_top = max(0, start_y - 5)
+                crop_bottom = end_y
+            elif pg == start_page:
+                # Première page : du titre jusqu'en bas
+                crop_top = max(0, start_y - 5)
+                crop_bottom = pg_height
+            elif pg == end_page:
+                # Dernière page : du haut jusqu'au prochain titre
+                crop_top = 0
+                crop_bottom = end_y
+            else:
+                # Page intermédiaire : toute la page
+                crop_top = 0
+                crop_bottom = pg_height
+
+            crop_height = crop_bottom - crop_top
+            if crop_height >= 40:  # filtre mini
+                crops.append({"page": pg, "y_top": crop_top, "y_bottom": crop_bottom})
+
+        if crops:
+            # Hauteur totale de la section (somme de tous les crops)
+            total_height = sum(c["y_bottom"] - c["y_top"] for c in crops)
+            sections.append({
+                "field": title["field"],
+                "crops": crops,
+                "total_height": total_height,
+            })
 
     # ── DÉDUPLICATION ──
-    # Si un même field apparaît plusieurs fois, garder celle avec la plus grande hauteur
+    # Si un même field apparaît plusieurs fois (ex: sommaire + vraie section),
+    # garder celui avec la plus grande hauteur totale
     best_sections = {}
     for s in sections:
         field = s["field"]
-        height = s["y_bottom"] - s["y_top"]
-        if field not in best_sections or height > (best_sections[field]["y_bottom"] - best_sections[field]["y_top"]):
+        if field not in best_sections or s["total_height"] > best_sections[field]["total_height"]:
             best_sections[field] = s
 
     final = list(best_sections.values())
-    final.sort(key=lambda s: (s["page"], s["y_top"]))
+    final.sort(key=lambda s: s["crops"][0]["page"])
 
-    sections_debug = [(s["field"], "p%d" % (s["page"]+1), "%.0f-%.0f" % (s["y_top"], s["y_bottom"])) for s in final]
-    print(f"[detect_sections_by_text] Sections finales: {sections_debug}")
+    for s in final:
+        crops_debug = ["p%d:%.0f-%.0f" % (c["page"]+1, c["y_top"], c["y_bottom"]) for c in s["crops"]]
+        print(f"[detect_sections_by_text] {s['field']} → {crops_debug}")
     return final
 
 
@@ -944,31 +989,26 @@ def extract_ft():
             sections = detect_sections_by_text(source_bytes)
             print(f"[extract-ft] Sections détectées: {len(sections)}")
 
-            # Grouper par field pour numéroter si multiple
-            from collections import Counter
-            field_counts = Counter(s["field"] for s in sections)
-
-            field_index = {}  # field -> compteur courant
             for section in sections:
                 field = section["field"]
                 friendly_name = FT_IMAGE_NAMES.get(field, field)
+                crops = section["crops"]
 
-                cropped = crop_pdf_section(
-                    source_bytes,
-                    section["page"],
-                    section["y_top"],
-                    section["y_bottom"],
-                    dpi=220
-                )
-                if cropped:
-                    # Numérotation : visuel.png si unique, visuel_1.png / visuel_2.png si multiple
-                    idx = field_index.get(field, 0)
-                    field_index[field] = idx + 1
-                    suffix = "" if field_counts[field] == 1 else f"_{idx + 1}"
-                    named_images.append({
-                        "filename": f"{friendly_name}{suffix}.png",
-                        "data": cropped
-                    })
+                for ci, crop in enumerate(crops):
+                    cropped = crop_pdf_section(
+                        source_bytes,
+                        crop["page"],
+                        crop["y_top"],
+                        crop["y_bottom"],
+                        dpi=220
+                    )
+                    if cropped:
+                        # 1 crop → visuel.png, multi-crop → visuel_1.png, visuel_2.png
+                        suffix = "" if len(crops) == 1 else f"_{ci + 1}"
+                        named_images.append({
+                            "filename": f"{friendly_name}{suffix}.png",
+                            "data": cropped
+                        })
 
         # 3. Construction du ZIP
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
