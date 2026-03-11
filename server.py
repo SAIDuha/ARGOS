@@ -713,7 +713,7 @@ def detect_sections_by_text(pdf_bytes):
     Détecte les titres de section par leur texte exact.
     Retourne une liste ordonnée de sections trouvées :
     [
-        {"title": "Visuel", "field": "visuel_present", "page": 0, "y_top": float_pts, "y_bottom": float_pts},
+        {"field": "visuel_present", "page": 0, "y_top": float_pts, "y_bottom": float_pts},
         ...
     ]
     y_top/y_bottom sont en points PDF (coordonnées absolues sur la page).
@@ -722,7 +722,6 @@ def detect_sections_by_text(pdf_bytes):
         return []
 
     # Mapping titre → nom de champ
-    # On matche sur le début du texte (case-insensitive, avec ou sans ":")
     TITLE_TO_FIELD = {
         "visuel":              "visuel_present",
         "barème de mesures":   "bareme_mesures_present",
@@ -731,42 +730,43 @@ def detect_sections_by_text(pdf_bytes):
         "details technique":   "details_technique_present",
         "détail technique":    "details_technique_present",
         "detail technique":    "details_technique_present",
-        # Titres de séparation (pas extraits en image, mais servent de borne)
-        "matière":             "_separator_matiere",
-        "matiere":             "_separator_matiere",
-        "descriptif":          "_separator_descriptif",
-        "codes articles":      "_separator_codes",
-        "code articles":       "_separator_codes",
-        "coloris":             "_separator_coloris",
-        "composition":         "_separator_composition",
-        "normes":              "_separator_normes",
-        "entretien":           "_separator_entretien",
-        "personnalisation":    "_separator_personnalisation",
-        "marquage":            "_separator_marquage",
+        "détails techniques":  "details_technique_present",
+        "details techniques":  "details_technique_present",
+    }
+
+    # Titres séparateurs : pas extraits en image, servent de borne basse
+    SEPARATOR_TITLES = {
+        "matière", "matiere", "descriptif", "codes articles", "code articles",
+        "coloris", "composition", "normes", "entretien", "personnalisation",
+        "marquage", "nomenclature", "historique", "sommaire", "table des matières",
+        "table des matieres", "référence", "reference", "tailles", "logo",
+        "conditionnement", "certification", "lavage", "stockage",
     }
 
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    all_titles = []  # {"field", "page", "y_top", "page_height"}
+    all_titles = []  # {"field", "page", "y_top", "page_height", "font_size"}
 
     for page_idx in range(len(doc)):
         page = doc[page_idx]
         page_height = page.rect.height
-        # Extraire les blocs de texte avec position
         blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
 
         for block in blocks:
-            if block.get("type") != 0:  # 0 = texte
+            if block.get("type") != 0:
                 continue
             for line in block.get("lines", []):
                 line_text = ""
-                line_y0 = line["bbox"][1]  # top Y
+                line_y0 = line["bbox"][1]
+                max_font_size = 0
                 for span in line.get("spans", []):
                     line_text += span["text"]
+                    max_font_size = max(max_font_size, span.get("size", 0))
 
                 cleaned = line_text.strip().rstrip(":").strip().lower()
                 if not cleaned:
                     continue
 
+                # Check section titles
                 for title_pattern, field_name in TITLE_TO_FIELD.items():
                     if cleaned == title_pattern or cleaned.startswith(title_pattern + " "):
                         all_titles.append({
@@ -774,93 +774,104 @@ def detect_sections_by_text(pdf_bytes):
                             "page": page_idx,
                             "y_top": line_y0,
                             "page_height": page_height,
+                            "font_size": max_font_size,
                             "raw_title": line_text.strip(),
+                            "is_separator": False,
                         })
                         break
+                else:
+                    # Check separator titles
+                    for sep in SEPARATOR_TITLES:
+                        if cleaned == sep or cleaned.startswith(sep + " "):
+                            all_titles.append({
+                                "field": "_separator_" + sep.replace(" ", "_"),
+                                "page": page_idx,
+                                "y_top": line_y0,
+                                "page_height": page_height,
+                                "font_size": max_font_size,
+                                "raw_title": line_text.strip(),
+                                "is_separator": True,
+                            })
+                            break
 
     doc.close()
 
     if not all_titles:
         return []
 
-    # Trier par (page, y_top) pour avoir l'ordre du document
+    # Trier par (page, y_top)
     all_titles.sort(key=lambda t: (t["page"], t["y_top"]))
-    titles_debug = [(t["raw_title"], "p%d" % (t["page"]+1), "y=%.1f" % t["y_top"]) for t in all_titles]
-    print(f"[detect_sections_by_text] Titres trouvés: {titles_debug}")
+    titles_debug = [(t["raw_title"], "p%d" % (t["page"]+1), "y=%.1f" % t["y_top"], "fs=%.1f" % t["font_size"]) for t in all_titles]
+    print(f"[detect_sections_by_text] Titres bruts trouvés: {titles_debug}")
 
-    # Pour chaque titre, la borne basse = le titre suivant (ou fin de page)
+    # ── FILTRE TABLE DES MATIÈRES ──
+    # Si 3+ titres connus (sections + séparateurs) sont groupés dans un rayon de 80pts
+    # sur la même page, c'est une table des matières → on les ignore tous
+    toc_indices = set()
+    for i, t in enumerate(all_titles):
+        cluster = [i]
+        for j in range(i + 1, len(all_titles)):
+            if all_titles[j]["page"] != t["page"]:
+                break
+            if all_titles[j]["y_top"] - t["y_top"] <= 80:
+                cluster.append(j)
+            else:
+                break
+        if len(cluster) >= 3:
+            toc_indices.update(cluster)
+
+    if toc_indices:
+        removed = [all_titles[i]["raw_title"] for i in toc_indices]
+        print(f"[detect_sections_by_text] Filtrés (TOC probable): {removed}")
+        all_titles = [t for i, t in enumerate(all_titles) if i not in toc_indices]
+
+    if not all_titles:
+        return []
+
+    # ── CONSTRUCTION DES SECTIONS ──
     sections = []
     for i, title in enumerate(all_titles):
         if title["field"].startswith("_separator_"):
-            continue  # On ne crop pas ces sections, elles servent juste de borne
+            continue  # Sert uniquement de borne basse
 
-        # Trouver la borne basse : prochain titre sur la même page, ou fin de page
-        y_bottom = title["page_height"]  # défaut : fin de la page
-        next_title_on_same_page = None
-
+        # Borne basse = prochain titre (section OU séparateur) sur la même page, ou fin de page
+        y_bottom = title["page_height"]
         for j in range(i + 1, len(all_titles)):
             nxt = all_titles[j]
             if nxt["page"] == title["page"]:
-                # Prochain titre sur la même page → borne basse
-                y_bottom = nxt["y_top"] - 5  # 5pts de marge avant le titre suivant
-                next_title_on_same_page = nxt
+                y_bottom = nxt["y_top"] - 5
                 break
             elif nxt["page"] > title["page"]:
-                # Le prochain titre est sur une page suivante
-                # → cette section va jusqu'en bas de la page courante
                 break
+
+        section_height = y_bottom - title["y_top"]
+        if section_height < 40:
+            print(f"[detect_sections_by_text] Section trop petite, ignorée: {title['raw_title']} ({section_height:.0f}pts)")
+            continue
 
         sections.append({
             "field": title["field"],
             "page": title["page"],
-            "y_top": max(0, title["y_top"] - 5),  # 5pts de marge au dessus du titre
+            "y_top": max(0, title["y_top"] - 5),
             "y_bottom": y_bottom,
             "page_height": title["page_height"],
         })
 
-        # Gérer la continuation multi-page :
-        # Si y_bottom == page_height (section va jusqu'en bas) et le prochain titre
-        # de section est sur une page ultérieure, la section continue sur la page suivante
-        if y_bottom >= title["page_height"] - 10:  # quasi fin de page
-            next_page = title["page"] + 1
-            # Chercher si un titre existe sur la page suivante
-            next_on_next = None
-            for j in range(i + 1, len(all_titles)):
-                if all_titles[j]["page"] == next_page:
-                    next_on_next = all_titles[j]
-                    break
-                elif all_titles[j]["page"] > next_page:
-                    break
+    # ── DÉDUPLICATION ──
+    # Si un même field apparaît plusieurs fois, garder celle avec la plus grande hauteur
+    best_sections = {}
+    for s in sections:
+        field = s["field"]
+        height = s["y_bottom"] - s["y_top"]
+        if field not in best_sections or height > (best_sections[field]["y_bottom"] - best_sections[field]["y_top"]):
+            best_sections[field] = s
 
-            if next_on_next:
-                # La page suivante a un titre → la continuation va du haut jusqu'à ce titre
-                if next_on_next["y_top"] > 50:  # il y a du contenu avant ce titre
-                    sections.append({
-                        "field": title["field"],
-                        "page": next_page,
-                        "y_top": 0,
-                        "y_bottom": next_on_next["y_top"] - 5,
-                        "page_height": next_on_next.get("page_height", title["page_height"]),
-                    })
-            else:
-                # Pas de titre sur la page suivante → toute la page est continuation
-                try:
-                    doc2 = fitz.open(stream=pdf_bytes, filetype="pdf")
-                    if next_page < len(doc2):
-                        sections.append({
-                            "field": title["field"],
-                            "page": next_page,
-                            "y_top": 0,
-                            "y_bottom": doc2[next_page].rect.height,
-                            "page_height": doc2[next_page].rect.height,
-                        })
-                    doc2.close()
-                except:
-                    pass
+    final = list(best_sections.values())
+    final.sort(key=lambda s: (s["page"], s["y_top"]))
 
-    sections_debug = [(s["field"], "p%d" % (s["page"]+1), "%.0f-%.0f" % (s["y_top"], s["y_bottom"])) for s in sections]
+    sections_debug = [(s["field"], "p%d" % (s["page"]+1), "%.0f-%.0f" % (s["y_top"], s["y_bottom"])) for s in final]
     print(f"[detect_sections_by_text] Sections finales: {sections_debug}")
-    return sections
+    return final
 
 
 def crop_pdf_section(pdf_bytes, page_index, y_top_pts, y_bottom_pts, dpi=220):
