@@ -955,6 +955,38 @@ FT_IMAGE_NAMES = {
 }
 
 
+def validate_crop_with_gemini(image_bytes, field_name):
+    """
+    Envoie l'image croppée à Gemini pour vérifier si elle contient du contenu utile.
+    Retourne True si l'image est valide, False si vide ou non pertinente.
+    """
+
+    prompt = f"""Regarde cette image extraite d'une fiche technique.
+
+Réponds UNIQUEMENT par un JSON :
+{{"valide": true, "raison": "courte explication"}} ou {{"valide": false, "raison": "courte explication"}}
+
+L'image est INVALIDE (valide=false) si :
+- Image quasi vide (fond blanc, marges, rien de visuel)
+- Contient UNIQUEMENT du texte de 3 lignes ou moins (pas de schéma, pas d'illustration, pas de tableau)
+
+Sinon l'image est VALIDE (valide=true) : elle contient des illustrations, schémas, tableaux, photos, dessins techniques, etc."""
+
+    try:
+        response = model.generate_content([
+            {"mime_type": "image/png", "data": base64.b64encode(image_bytes).decode()},
+            prompt
+        ])
+        result = clean_json_response(response.text)
+        valide = result.get("valide", False)
+        raison = result.get("raison", "")
+        print(f"[validate_crop] {field_name} → valide={valide} ({raison})")
+        return valide
+    except Exception as e:
+        print(f"[validate_crop] Erreur Gemini: {e} → on garde l'image par défaut")
+        return True  # En cas d'erreur, on garde l'image
+
+
 @app.route('/api/extract-ft', methods=['POST'])
 def extract_ft():
     """
@@ -994,6 +1026,7 @@ def extract_ft():
                 friendly_name = FT_IMAGE_NAMES.get(field, field)
                 crops = section["crops"]
 
+                valid_crops = []
                 for ci, crop in enumerate(crops):
                     cropped = crop_pdf_section(
                         source_bytes,
@@ -1003,12 +1036,18 @@ def extract_ft():
                         dpi=220
                     )
                     if cropped:
-                        # 1 crop → visuel.png, multi-crop → visuel_1.png, visuel_2.png
-                        suffix = "" if len(crops) == 1 else f"_{ci + 1}"
-                        named_images.append({
-                            "filename": f"{friendly_name}{suffix}.png",
-                            "data": cropped
-                        })
+                        # Vérification Gemini : l'image contient-elle du contenu utile ?
+                        if validate_crop_with_gemini(cropped, field):
+                            valid_crops.append(cropped)
+                        else:
+                            print(f"[extract-ft] Crop rejeté: {friendly_name} page {crop['page']+1}")
+
+                for vi, img_data in enumerate(valid_crops):
+                    suffix = "" if len(valid_crops) == 1 else f"_{vi + 1}"
+                    named_images.append({
+                        "filename": f"{friendly_name}{suffix}.png",
+                        "data": img_data
+                    })
 
         # 3. Construction du ZIP
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
