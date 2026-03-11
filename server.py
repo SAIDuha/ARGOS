@@ -707,126 +707,166 @@ def extract_pdf_pages_as_images(pdf_bytes, dpi=150):
         return []
 
 
-def detect_image_pages_with_gemini(fields, pages_images):
+def detect_sections_by_text(pdf_bytes):
     """
-    Envoie toutes les pages à Gemini.
-    Pour chaque section image, retourne UNE LISTE d'occurrences (il peut y en avoir plusieurs).
+    Scanne toutes les pages du PDF avec PyMuPDF.
+    Détecte les titres de section par leur texte exact.
+    Retourne une liste ordonnée de sections trouvées :
+    [
+        {"title": "Visuel", "field": "visuel_present", "page": 0, "y_top": float_pts, "y_bottom": float_pts},
+        ...
+    ]
+    y_top/y_bottom sont en points PDF (coordonnées absolues sur la page).
+    """
+    if not PYMUPDF_AVAILABLE:
+        return []
 
-    Retourne un dict :
-    {
-      "nom_champ": [
-        {"page": int_0based, "y_top_pct": float, "y_bottom_pct": float},
-        ...  # autant d'occurrences que nécessaire
-      ],
-      ...
+    # Mapping titre → nom de champ
+    # On matche sur le début du texte (case-insensitive, avec ou sans ":")
+    TITLE_TO_FIELD = {
+        "visuel":              "visuel_present",
+        "barème de mesures":   "bareme_mesures_present",
+        "bareme de mesures":   "bareme_mesures_present",
+        "détails technique":   "details_technique_present",
+        "details technique":   "details_technique_present",
+        "détail technique":    "details_technique_present",
+        "detail technique":    "details_technique_present",
+        # Titres de séparation (pas extraits en image, mais servent de borne)
+        "matière":             "_separator_matiere",
+        "matiere":             "_separator_matiere",
+        "descriptif":          "_separator_descriptif",
+        "codes articles":      "_separator_codes",
+        "code articles":       "_separator_codes",
+        "coloris":             "_separator_coloris",
+        "composition":         "_separator_composition",
+        "normes":              "_separator_normes",
+        "entretien":           "_separator_entretien",
+        "personnalisation":    "_separator_personnalisation",
+        "marquage":            "_separator_marquage",
     }
-    """
-    image_fields = []
-    for f in fields:
-        if f.get("type") == "champ":
-            vp = [v["valeur"] for v in f.get("valeurs_possibles", [])]
-            if "oui" in vp and "non" in vp:
-                image_fields.append(f["nom"])
 
-    if not image_fields or not pages_images:
-        return {}
+    doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+    all_titles = []  # {"field", "page", "y_top", "page_height"}
 
-    fields_list = "\n".join(f"  - {nom}" for nom in image_fields)
-    prompt = f"""Tu reçois les pages d'une fiche technique (page 1, page 2, etc.).
+    for page_idx in range(len(doc)):
+        page = doc[page_idx]
+        page_height = page.rect.height
+        # Extraire les blocs de texte avec position
+        blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
 
-RÈGLE FONDAMENTALE : N'IMPORTE QUELLE section peut s'étaler sur PLUSIEURS pages consécutives.
-Tu dois scanner TOUTES les pages et retourner TOUTES les occurrences de chaque section.
-
-RÈGLE DE CONTINUITÉ (très importante) :
-Si une section commence sur une page et continue sur la page suivante SANS qu'un nouveau titre de section apparaisse entre les deux, alors c'est la MÊME occurrence qui continue.
-Dans ce cas, crée UNE occurrence par page (même occurrence logique, pages séparées).
-Exemple : le barème de mesures commence page 4 et le tableau se poursuit page 5 sans titre → deux entrées pour bareme_mesures_present (page 4 et page 5).
-Exemple : le visuel a des illustrations page 1 en bas, puis d'autres illustrations page 2 en haut sans titre entre les deux → deux entrées pour visuel_present.
-
-Pour chaque occurrence d'un champ, retourne :
-  - page         : numéro de page entier base 1
-  - y_top_pct    : % vertical où commence l'occurrence sur cette page (0 si continuation depuis la page précédente)
-  - y_bottom_pct : % vertical où se termine l'occurrence sur cette page (100 si continue sur la page suivante, sinon juste avant le prochain titre)
-
-Champs à localiser (chercher TOUTES leurs occurrences sur TOUTES les pages) :
-{fields_list}
-
-Correspondances (LIS ATTENTIVEMENT — la distinction est CRUCIALE) :
-- visuel_present → zone titrée "Visuel :" (ou sans titre) montrant les VARIANTES COLORIS du produit (ex: 3 blousons côte à côte avec légendes "Jaune HV / Gris", "Jaune HV / Marine"...). Pas de cotes, pas de flèches techniques, pas d'annotations de mesure. C'est une vue "catalogue" propre.
-- bareme_mesures_present → zone titrée "Barème de mesures :" avec schéma de mesures + tableau de tailles.
-- details_technique_present → zone titrée "Détails technique :" montrant des SCHÉMAS TECHNIQUES avec cotes (flèches rouges/bleues), annotations de mesure (mm, cm), détails de couture, zooms sur des éléments (col, poches, fermetures). Même si le produit est un blouson comme le visuel, la présence de COTES et ANNOTATIONS TECHNIQUES = details_technique, PAS visuel.
-
-RÈGLE CLÉ : Si tu vois des flèches de cotation, des mesures en mm/cm, des zooms de détails constructifs → c'est details_technique_present, JAMAIS visuel_present.
-
-FORMAT : chaque champ doit avoir une LISTE, même s'il n'y a qu'une seule entrée.
-
-RÉPONDS UNIQUEMENT en JSON valide :
-{{
-  "nom_champ": [
-    {{"page": <int>, "y_top_pct": <float>, "y_bottom_pct": <float>}},
-    {{"page": <int>, "y_top_pct": <float>, "y_bottom_pct": <float>}}
-  ],
-  ...
-}}
-
-Exemple complet :
-{{
-  "visuel_present": [
-    {{"page": 1, "y_top_pct": 55.0, "y_bottom_pct": 100.0}},
-    {{"page": 2, "y_top_pct": 0.0,  "y_bottom_pct": 45.0}}
-  ],
-  "bareme_mesures_present": [
-    {{"page": 4, "y_top_pct": 5.0,  "y_bottom_pct": 100.0}},
-    {{"page": 5, "y_top_pct": 0.0,  "y_bottom_pct": 70.0}}
-  ],
-  "details_technique_present": [
-    {{"page": 5, "y_top_pct": 72.0, "y_bottom_pct": 100.0}},
-    {{"page": 6, "y_top_pct": 0.0,  "y_bottom_pct": 100.0}}
-  ]
-}}
-
-Si un champ est totalement absent du document, omets-le du JSON."""
-
-    content_parts = []
-    for p in pages_images:
-        content_parts.append({"mime_type": "image/png", "data": base64.b64encode(p["data"]).decode()})
-    content_parts.append(prompt)
-
-    try:
-        response = model.generate_content(content_parts)
-        result = clean_json_response(response.text)
-        mapping = {}
-        for nom in image_fields:
-            val = result.get(nom)
-            if not val:
+        for block in blocks:
+            if block.get("type") != 0:  # 0 = texte
                 continue
-            # Normaliser : accepter un dict seul ou une liste
-            if isinstance(val, dict):
-                val = [val]
-            occurrences = []
-            for item in val:
-                if isinstance(item, dict) and item.get("page") is not None:
-                    try:
-                        occurrences.append({
-                            "page":         int(item["page"]) - 1,  # 0-based
-                            "y_top_pct":    float(item.get("y_top_pct",    0)),
-                            "y_bottom_pct": float(item.get("y_bottom_pct", 100))
+            for line in block.get("lines", []):
+                line_text = ""
+                line_y0 = line["bbox"][1]  # top Y
+                for span in line.get("spans", []):
+                    line_text += span["text"]
+
+                cleaned = line_text.strip().rstrip(":").strip().lower()
+                if not cleaned:
+                    continue
+
+                for title_pattern, field_name in TITLE_TO_FIELD.items():
+                    if cleaned == title_pattern or cleaned.startswith(title_pattern + " "):
+                        all_titles.append({
+                            "field": field_name,
+                            "page": page_idx,
+                            "y_top": line_y0,
+                            "page_height": page_height,
+                            "raw_title": line_text.strip(),
                         })
-                    except Exception as e:
-                        print(f"[detect_image_pages] Parse error pour {nom}: {e}")
-            if occurrences:
-                mapping[nom] = occurrences
-        print(f"[detect_image_pages] Résultat Gemini: {mapping}")
-        return mapping
-    except Exception as e:
-        print(f"[detect_image_pages] Erreur: {e}")
-        return {}
+                        break
+
+    doc.close()
+
+    if not all_titles:
+        return []
+
+    # Trier par (page, y_top) pour avoir l'ordre du document
+    all_titles.sort(key=lambda t: (t["page"], t["y_top"]))
+    titles_debug = [(t["raw_title"], "p%d" % (t["page"]+1), "y=%.1f" % t["y_top"]) for t in all_titles]
+    print(f"[detect_sections_by_text] Titres trouvés: {titles_debug}")
+
+    # Pour chaque titre, la borne basse = le titre suivant (ou fin de page)
+    sections = []
+    for i, title in enumerate(all_titles):
+        if title["field"].startswith("_separator_"):
+            continue  # On ne crop pas ces sections, elles servent juste de borne
+
+        # Trouver la borne basse : prochain titre sur la même page, ou fin de page
+        y_bottom = title["page_height"]  # défaut : fin de la page
+        next_title_on_same_page = None
+
+        for j in range(i + 1, len(all_titles)):
+            nxt = all_titles[j]
+            if nxt["page"] == title["page"]:
+                # Prochain titre sur la même page → borne basse
+                y_bottom = nxt["y_top"] - 5  # 5pts de marge avant le titre suivant
+                next_title_on_same_page = nxt
+                break
+            elif nxt["page"] > title["page"]:
+                # Le prochain titre est sur une page suivante
+                # → cette section va jusqu'en bas de la page courante
+                break
+
+        sections.append({
+            "field": title["field"],
+            "page": title["page"],
+            "y_top": max(0, title["y_top"] - 5),  # 5pts de marge au dessus du titre
+            "y_bottom": y_bottom,
+            "page_height": title["page_height"],
+        })
+
+        # Gérer la continuation multi-page :
+        # Si y_bottom == page_height (section va jusqu'en bas) et le prochain titre
+        # de section est sur une page ultérieure, la section continue sur la page suivante
+        if y_bottom >= title["page_height"] - 10:  # quasi fin de page
+            next_page = title["page"] + 1
+            # Chercher si un titre existe sur la page suivante
+            next_on_next = None
+            for j in range(i + 1, len(all_titles)):
+                if all_titles[j]["page"] == next_page:
+                    next_on_next = all_titles[j]
+                    break
+                elif all_titles[j]["page"] > next_page:
+                    break
+
+            if next_on_next:
+                # La page suivante a un titre → la continuation va du haut jusqu'à ce titre
+                if next_on_next["y_top"] > 50:  # il y a du contenu avant ce titre
+                    sections.append({
+                        "field": title["field"],
+                        "page": next_page,
+                        "y_top": 0,
+                        "y_bottom": next_on_next["y_top"] - 5,
+                        "page_height": next_on_next.get("page_height", title["page_height"]),
+                    })
+            else:
+                # Pas de titre sur la page suivante → toute la page est continuation
+                try:
+                    doc2 = fitz.open(stream=pdf_bytes, filetype="pdf")
+                    if next_page < len(doc2):
+                        sections.append({
+                            "field": title["field"],
+                            "page": next_page,
+                            "y_top": 0,
+                            "y_bottom": doc2[next_page].rect.height,
+                            "page_height": doc2[next_page].rect.height,
+                        })
+                    doc2.close()
+                except:
+                    pass
+
+    sections_debug = [(s["field"], "p%d" % (s["page"]+1), "%.0f-%.0f" % (s["y_top"], s["y_bottom"])) for s in sections]
+    print(f"[detect_sections_by_text] Sections finales: {sections_debug}")
+    return sections
 
 
-def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
+def crop_pdf_section(pdf_bytes, page_index, y_top_pts, y_bottom_pts, dpi=220):
     """
     Extrait une portion verticale d'une page PDF via PyMuPDF.
-    y_top_pct et y_bottom_pct sont des pourcentages (0–100) de la hauteur de page.
+    y_top_pts et y_bottom_pts sont en POINTS PDF (pas en pourcentage).
     Retourne les bytes PNG de la zone croppée.
     """
     if not PYMUPDF_AVAILABLE:
@@ -834,20 +874,33 @@ def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
         page = doc[page_index]
-        rect = page.rect
+        page_w = page.rect.width
+        page_h = page.rect.height
 
-        page_h = rect.height
-        page_w = rect.width
+        clip = fitz.Rect(0, max(0, y_top_pts), page_w, min(page_h, y_bottom_pts))
 
-        # Marge haute : 10px pour inclure le titre de section
-        # Pas de marge basse automatique : precise_crop_with_gemini gère l'arrêt exact
-        margin_top_pts = 10
+        mat = fitz.Matrix(dpi / 72, dpi / 72)
+        pix = page.get_pixmap(matrix=mat, clip=clip)
+        img_bytes = pix.tobytes("png")
+        doc.close()
+        return img_bytes
+    except Exception as e:
+        print(f"[crop_pdf_section] Erreur: {e}")
+        return None
 
+
+# On garde l'ancienne fonction crop pour compatibilité (pourcentages)
+def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
+    if not PYMUPDF_AVAILABLE:
+        return None
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        page = doc[page_index]
+        page_h = page.rect.height
+        page_w = page.rect.width
         y_top    = page_h * (y_top_pct / 100.0)
         y_bottom = page_h * (y_bottom_pct / 100.0)
-
-        clip = fitz.Rect(0, max(0, y_top - margin_top_pts), page_w, min(page_h, y_bottom))
-
+        clip = fitz.Rect(0, max(0, y_top), page_w, min(page_h, y_bottom))
         mat = fitz.Matrix(dpi / 72, dpi / 72)
         pix = page.get_pixmap(matrix=mat, clip=clip)
         img_bytes = pix.tobytes("png")
@@ -858,77 +911,12 @@ def crop_pdf_page(pdf_bytes, page_index, y_top_pct, y_bottom_pct, dpi=220):
         return None
 
 
-# Sections qui contiennent des tableaux → on fait un 2e appel Gemini ciblé pour le crop précis
-FT_PRECISE_CROP = {"bareme_mesures_present", "details_technique_present", "visuel_present"}
-
 # Mapping nom_champ → nom de fichier lisible
 FT_IMAGE_NAMES = {
     "visuel_present": "visuel",
     "bareme_mesures_present": "bareme_mesures",
     "details_technique_present": "details_technique",
 }
-
-
-def precise_crop_with_gemini(pdf_bytes, page_index, nom_champ, rough_y_top_pct):
-    """
-    2e passe : envoie uniquement la page concernée à Gemini (haute résolution)
-    et lui demande les coordonnées précises (y_top_pct, y_bottom_pct) de la section.
-    Retourne (y_top_pct, y_bottom_pct) ou None en cas d'échec.
-    """
-    section_descriptions = {
-        "visuel_present":            "UNIQUEMENT la zone contenant les illustrations/photos des variantes coloris du produit, sous le titre 'Visuel :'. STOP IMMÉDIATEMENT dès que tu vois un titre de section suivant comme 'Matière :', 'Barème de mesures :', 'Descriptif :', 'Détails technique :', 'Codes articles :' etc. Le y_bottom_pct doit être AVANT la première lettre du titre suivant, avec 1% de marge AVANT.",
-        "bareme_mesures_present":    "UNIQUEMENT la section 'Barème de mesures :' contenant le schéma de mesures + le tableau de mesures par taille. Inclure toutes les lignes du tableau. STOP dès qu'un autre titre apparaît.",
-        "details_technique_present": "UNIQUEMENT la section 'Détails technique :' contenant les schémas techniques avec cotes et annotations. STOP dès qu'un autre titre apparaît.",
-    }
-    description = section_descriptions.get(nom_champ, f"la section {nom_champ}")
-
-    if not PYMUPDF_AVAILABLE:
-        return None
-    try:
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        page = doc[page_index]
-        mat = fitz.Matrix(200 / 72, 200 / 72)
-        pix = page.get_pixmap(matrix=mat)
-        page_png = pix.tobytes("png")
-        doc.close()
-    except Exception as e:
-        print(f"[precise_crop] Render erreur: {e}")
-        return None
-
-    prompt = f"""Tu vois une page de fiche technique.
-
-Ta tâche : trouver les limites verticales EXACTES de : {description}
-
-Réponds avec :
-- y_top_pct    : % vertical du début (inclure le titre, avec 1% de marge au dessus)
-- y_bottom_pct : % vertical de la fin STRICTE du contenu
-
-CRITIQUE — RÈGLE DE COUPURE :
-1. Scanne la page de haut en bas.
-2. Repère TOUS les titres de section (texte coloré ou en gras suivi de ":" comme "Visuel :", "Matière :", "Barème de mesures :", "Détails technique :", "Descriptif :", "Codes articles :").
-3. Le y_bottom_pct DOIT être 1-2% AVANT le titre de la section suivante.
-4. Si le mot "Matière" apparaît sous le visuel, ton y_bottom_pct doit être AU DESSUS de ce mot.
-5. En cas de doute, coupe PLUS HAUT plutôt que trop bas.
-
-RÉPONDS UNIQUEMENT en JSON :
-{{"y_top_pct": <float>, "y_bottom_pct": <float>}}"""
-
-    try:
-        response = model.generate_content([
-            {"mime_type": "image/png", "data": base64.b64encode(page_png).decode()},
-            prompt
-        ])
-        result = clean_json_response(response.text)
-        y_top    = float(result.get("y_top_pct",    rough_y_top_pct))
-        y_bottom = float(result.get("y_bottom_pct", 100.0))
-        # Marge de sécurité : retirer 1.5% en bas pour ne jamais inclure le titre suivant
-        if y_bottom < 100.0:
-            y_bottom = max(y_top + 5, y_bottom - 1.5)
-        print(f"[precise_crop] {nom_champ} page {page_index+1} → y_top={y_top}% y_bottom={y_bottom}%")
-        return y_top, y_bottom
-    except Exception as e:
-        print(f"[precise_crop] Erreur Gemini: {e}")
-        return None
 
 
 @app.route('/api/extract-ft', methods=['POST'])
@@ -939,7 +927,7 @@ def extract_ft():
       - {stem}_complet.xml
       - {stem}_simple.xml
       - images/visuel.png, images/bareme_mesures.png, images/details_technique.png
-        (seulement les pages pertinentes, nommées par section)
+        (crop basé sur la détection de titres par PyMuPDF — zéro Gemini pour les coordonnées)
     """
     try:
         source_file = request.files.get('source')
@@ -958,41 +946,38 @@ def extract_ft():
         xml_complet = fill_xml_complet(template_content, extractions, source_file.filename)
         xml_simple = fill_xml_simple(template_content, extractions)
 
-        # 2. Extraction pages PDF + détection par Gemini + crop précis
+        # 2. Détection des sections par texte PyMuPDF + crop exact
         named_images = []
         mime_type, _ = mimetypes.guess_type(source_file.filename)
         if mime_type == "application/pdf" and PYMUPDF_AVAILABLE:
-            pages_images = extract_pdf_pages_as_images(source_bytes, dpi=150)
+            sections = detect_sections_by_text(source_bytes)
+            print(f"[extract-ft] Sections détectées: {len(sections)}")
 
-            if pages_images:
-                page_mapping = detect_image_pages_with_gemini(fields, pages_images)
-                print(f"[extract-ft] Page mapping: {page_mapping}")
+            # Grouper par field pour numéroter si multiple
+            from collections import Counter
+            field_counts = Counter(s["field"] for s in sections)
 
-                for nom_champ, occurrences in page_mapping.items():
-                    friendly_name = FT_IMAGE_NAMES.get(nom_champ, nom_champ)
+            field_index = {}  # field -> compteur courant
+            for section in sections:
+                field = section["field"]
+                friendly_name = FT_IMAGE_NAMES.get(field, field)
 
-                    for i, occ in enumerate(occurrences):
-                        page_idx     = occ["page"]
-                        y_top_pct    = occ["y_top_pct"]
-                        y_bottom_pct = occ["y_bottom_pct"]
-
-                        if not (0 <= page_idx < len(pages_images)):
-                            continue
-
-                        # 2e passe Gemini pour crop précis
-                        if nom_champ in FT_PRECISE_CROP:
-                            precise = precise_crop_with_gemini(source_bytes, page_idx, nom_champ, y_top_pct)
-                            if precise:
-                                y_top_pct, y_bottom_pct = precise
-
-                        cropped = crop_pdf_page(source_bytes, page_idx, y_top_pct, y_bottom_pct, dpi=220)
-                        if cropped:
-                            # Un seul visuel → visuel.png, plusieurs → visuel_1.png, visuel_2.png...
-                            suffix = "" if len(occurrences) == 1 else f"_{i+1}"
-                            named_images.append({
-                                "filename": f"{friendly_name}{suffix}.png",
-                                "data": cropped
-                            })
+                cropped = crop_pdf_section(
+                    source_bytes,
+                    section["page"],
+                    section["y_top"],
+                    section["y_bottom"],
+                    dpi=220
+                )
+                if cropped:
+                    # Numérotation : visuel.png si unique, visuel_1.png / visuel_2.png si multiple
+                    idx = field_index.get(field, 0)
+                    field_index[field] = idx + 1
+                    suffix = "" if field_counts[field] == 1 else f"_{idx + 1}"
+                    named_images.append({
+                        "filename": f"{friendly_name}{suffix}.png",
+                        "data": cropped
+                    })
 
         # 3. Construction du ZIP
         ts = datetime.now().strftime('%Y%m%d_%H%M%S')
