@@ -703,10 +703,37 @@ def get_sheets_service():
 
 
 def get_drive_service():
-    """Initialise le client Google Drive à partir du compte de service."""
+    """
+    Initialise le client Google Drive.
+    Priorité : GOOGLE_DRIVE_CREDENTIALS (OAuth user) > GOOGLE_SERVICE_ACCOUNT (fallback).
+    """
+    from google.oauth2.credentials import Credentials as UserCredentials
+
+    # Option 1: GOOGLE_DRIVE_CREDENTIALS (OAuth token d'un vrai utilisateur — a du stockage)
+    drive_creds_json = os.environ.get("GOOGLE_DRIVE_CREDENTIALS")
+    if drive_creds_json:
+        try:
+            creds_info = json.loads(drive_creds_json)
+            if creds_info.get("type") == "service_account":
+                creds = ServiceCredentials.from_service_account_info(creds_info, scopes=GOOGLE_SCOPES)
+                print("[Drive] Credentials chargés depuis GOOGLE_DRIVE_CREDENTIALS (service account)")
+            elif "refresh_token" in creds_info:
+                creds = UserCredentials.from_authorized_user_info(creds_info, GOOGLE_SCOPES)
+                if creds and creds.expired and creds.refresh_token:
+                    creds.refresh(Request())
+                print("[Drive] Credentials chargés depuis GOOGLE_DRIVE_CREDENTIALS (OAuth)")
+            else:
+                creds = None
+            if creds:
+                return build("drive", "v3", credentials=creds)
+        except Exception as e:
+            print(f"[Drive] Erreur lecture GOOGLE_DRIVE_CREDENTIALS: {e}")
+
+    # Option 2: Fallback sur service account
     creds = get_sheets_credentials()
     if not creds:
         raise FileNotFoundError("Credentials Google non trouvés pour Drive.")
+    print("[Drive] Fallback sur service account (peut échouer si pas Workspace)")
     return build("drive", "v3", credentials=creds)
 
 
@@ -1648,16 +1675,22 @@ def test_drive():
         results["steps"].append({"step": "credentials", "ok": False, "error": str(e)})
         return jsonify(results)
 
-    # Step 2: Upload test
+    # Step 2: Upload test — raw, no wrapper
     try:
+        drive = get_drive_service()
         tiny_png = (
             b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
             b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
             b'\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03'
             b'\x00\x01\x00\x05\xfe\xd4\x00\x00\x00\x00IEND\xaeB`\x82'
         )
-        link = upload_image_to_drive(tiny_png, "ARGOS_test.png")
-        results["steps"].append({"step": "upload", "ok": link is not None, "link": link})
+        metadata = {"name": "ARGOS_test.png", "parents": [GDRIVE_FOLDER_ID]}
+        media = MediaIoBaseUpload(io.BytesIO(tiny_png), mimetype="image/png", resumable=False)
+        created = drive.files().create(
+            body=metadata, media_body=media, fields="id,name,webViewLink",
+            supportsAllDrives=True
+        ).execute()
+        results["steps"].append({"step": "upload", "ok": True, "file": created})
     except Exception as e:
         results["steps"].append({"step": "upload", "ok": False, "error": str(e), "trace": traceback.format_exc()})
 
