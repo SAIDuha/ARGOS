@@ -783,6 +783,7 @@ def extraction_to_row(extractions, source_filename):
     Transforme le dict d'extractions Gemini en un OrderedDict plat.
     - Champs simples → une colonne par champ
     - Groupes (champRGRS) → une colonne par sous-champ, instances jointes par " | "
+    - Les champs vides sont ignorés (pas de colonne créée)
     """
     row = {"fichier_source": source_filename}
     for ext in extractions.get("extractions", []):
@@ -798,10 +799,14 @@ def extraction_to_row(extractions, source_filename):
                 for sk in sub_keys:
                     col_name = f"{nom}__{sk}"
                     values = [str(inst.get(sk, "")) for inst in instances]
-                    row[col_name] = " | ".join(v for v in values if v)
+                    joined = " | ".join(v for v in values if v)
+                    if joined:
+                        row[col_name] = joined
         else:
             v = ext.get("valeur_defaut", "")
-            row[nom] = ", ".join(v) if isinstance(v, list) else str(v) if v else ""
+            val = ", ".join(v) if isinstance(v, list) else str(v) if v else ""
+            if val:
+                row[nom] = val
     return row
 
 
