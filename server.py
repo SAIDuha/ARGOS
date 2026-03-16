@@ -39,6 +39,7 @@ GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 # --- Google Sheets & Drive (Service Account) ---
 GSHEET_ID = os.environ.get("GSHEET_ID", "")
 GSHEET_SHEET_NAME = os.environ.get("GSHEET_SHEET_NAME", "Fiches Techniques")
+GDRIVE_FOLDER_ID = os.environ.get("GDRIVE_FOLDER_ID", "")
 SERVICE_ACCOUNT_FILE = "service_account.json"
 GOOGLE_SCOPES = [
     "https://www.googleapis.com/auth/spreadsheets",
@@ -709,41 +710,18 @@ def get_drive_service():
     return build("drive", "v3", credentials=creds)
 
 
-# Cache du dossier parent du Sheet (pour y stocker les images)
-_DRIVE_PARENT_FOLDER_ID = None
-
-
-def get_sheet_parent_folder_id():
-    """Récupère le dossier parent du Google Sheet sur Drive."""
-    global _DRIVE_PARENT_FOLDER_ID
-    if _DRIVE_PARENT_FOLDER_ID is not None:
-        return _DRIVE_PARENT_FOLDER_ID
-    try:
-        drive = get_drive_service()
-        file_meta = drive.files().get(
-            fileId=GSHEET_ID, fields="parents", supportsAllDrives=True
-        ).execute()
-        parents = file_meta.get("parents")
-        _DRIVE_PARENT_FOLDER_ID = parents[0] if parents else ""
-    except Exception as e:
-        print(f"[Drive] Impossible de récupérer le dossier parent: {e}")
-        _DRIVE_PARENT_FOLDER_ID = ""
-    return _DRIVE_PARENT_FOLDER_ID or None
-
-
 def upload_image_to_drive(image_bytes, filename, mime_type="image/png"):
     """
-    Upload une image (bytes) vers Google Drive dans le même dossier que le Sheet.
+    Upload une image (bytes) vers Google Drive dans le dossier GDRIVE_FOLDER_ID.
     Retourne le lien Drive ou None.
     """
+    if not GDRIVE_FOLDER_ID:
+        print("[Drive] GDRIVE_FOLDER_ID non configuré, upload ignoré.")
+        return None
     try:
         drive = get_drive_service()
-        parent_id = get_sheet_parent_folder_id()
 
-        metadata = {"name": filename}
-        if parent_id:
-            metadata["parents"] = [parent_id]
-
+        metadata = {"name": filename, "parents": [GDRIVE_FOLDER_ID]}
         media = MediaIoBaseUpload(io.BytesIO(image_bytes), mimetype=mime_type, resumable=False)
         created = drive.files().create(
             body=metadata, media_body=media,
@@ -762,7 +740,7 @@ def upload_image_to_drive(image_bytes, filename, mime_type="image/png"):
                 supportsAllDrives=True
             ).execute()
         except Exception:
-            pass  # pas grave si ça échoue
+            pass
 
         link = f"https://drive.google.com/file/d/{file_id}/view"
         print(f"[Drive] Upload OK: {filename} → {link}")
@@ -1395,7 +1373,7 @@ def extract_ft_batch():
                             })
 
                             # Upload sur Drive
-                            if GSHEET_ID:
+                            if GDRIVE_FOLDER_ID:
                                 drive_name = f"{stem}_{img_filename}"
                                 link = upload_image_to_drive(img_data, drive_name)
                                 if link:
@@ -1654,7 +1632,11 @@ def debug_session():
 def test_drive():
     """Endpoint de test pour vérifier que l'upload Drive fonctionne."""
     import traceback
-    results = {"steps": [], "gsheet_id": GSHEET_ID}
+    results = {"gsheet_id": GSHEET_ID, "gdrive_folder_id": GDRIVE_FOLDER_ID, "steps": []}
+
+    if not GDRIVE_FOLDER_ID:
+        results["steps"].append({"step": "config", "ok": False, "error": "GDRIVE_FOLDER_ID non configuré"})
+        return jsonify(results)
 
     # Step 1: Credentials
     try:
@@ -1666,46 +1648,18 @@ def test_drive():
         results["steps"].append({"step": "credentials", "ok": False, "error": str(e)})
         return jsonify(results)
 
-    # Step 2: Drive service
+    # Step 2: Upload test
     try:
-        drive = build("drive", "v3", credentials=creds)
-        results["steps"].append({"step": "drive_service", "ok": True})
-    except Exception as e:
-        results["steps"].append({"step": "drive_service", "ok": False, "error": str(e)})
-        return jsonify(results)
-
-    # Step 3: Get Sheet info from Drive
-    try:
-        file_meta = drive.files().get(
-            fileId=GSHEET_ID, fields="id,name,parents", supportsAllDrives=True
-        ).execute()
-        results["steps"].append({"step": "sheet_info", "ok": True, "data": file_meta})
-    except Exception as e:
-        results["steps"].append({"step": "sheet_info", "ok": False, "error": str(e), "trace": traceback.format_exc()})
-
-    # Step 4: Upload test — NO try/catch, expose raw error
-    try:
-        # 1x1 red pixel PNG (valid)
         tiny_png = (
             b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
             b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
             b'\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03'
             b'\x00\x01\x00\x05\xfe\xd4\x00\x00\x00\x00IEND\xaeB`\x82'
         )
-
-        metadata = {"name": "ARGOS_test.png"}
-        parent_id = file_meta.get("parents", [None])[0] if "parents" in file_meta else None
-        if parent_id:
-            metadata["parents"] = [parent_id]
-        results["steps"].append({"step": "upload_metadata", "metadata": metadata, "parent_id": parent_id})
-
-        media = MediaIoBaseUpload(io.BytesIO(tiny_png), mimetype="image/png", resumable=False)
-        created = drive.files().create(
-            body=metadata, media_body=media, fields="id,name,webViewLink"
-        ).execute()
-        results["steps"].append({"step": "upload_result", "ok": True, "data": created})
+        link = upload_image_to_drive(tiny_png, "ARGOS_test.png")
+        results["steps"].append({"step": "upload", "ok": link is not None, "link": link})
     except Exception as e:
-        results["steps"].append({"step": "upload_failed", "ok": False, "error": str(e), "trace": traceback.format_exc()})
+        results["steps"].append({"step": "upload", "ok": False, "error": str(e), "trace": traceback.format_exc()})
 
     return jsonify(results)
 
