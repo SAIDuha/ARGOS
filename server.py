@@ -20,6 +20,7 @@ from flask_cors import CORS
 from werkzeug.middleware.proxy_fix import ProxyFix
 import google.generativeai as genai
 from google.oauth2.credentials import Credentials
+from google.oauth2.service_account import Credentials as ServiceCredentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
 from google.auth.transport.requests import Request
@@ -31,10 +32,13 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 MODEL_NAME = "gemini-2.0-flash"
 GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
-GMAIL_SCOPES = [
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/spreadsheets'
-]
+GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
+
+# --- Google Sheets (Service Account) ---
+GSHEET_ID = os.environ.get("GSHEET_ID", "")
+GSHEET_SHEET_NAME = os.environ.get("GSHEET_SHEET_NAME", "Fiches Techniques")
+SERVICE_ACCOUNT_FILE = "service_account.json"
+SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(MODEL_NAME)
@@ -57,7 +61,7 @@ CORS(app, supports_credentials=True, origins=[
     "https://argos-vuzs.onrender.com",
     "http://localhost:5000",
     "http://127.0.0.1:5000"
-], expose_headers=['X-Sheet-Url'])
+])
 
 # ============================================================
 # PARSING DU TEMPLATE XML — NOUVELLE ARCHITECTURE
@@ -652,8 +656,45 @@ def extract_parts(service, msg_id, payload, data):
 
 
 # ============================================================
-# GOOGLE SHEETS — EXPORT FT (APPEND MODE)
+# GOOGLE SHEETS — SERVICE ACCOUNT (APPEND MODE)
 # ============================================================
+
+def get_sheets_credentials():
+    """
+    Récupère les credentials Google Sheets depuis :
+    1. Variable d'environnement GOOGLE_SERVICE_ACCOUNT (JSON string)
+    2. Fichier service_account.json
+    """
+    # Option 1: Variable d'environnement (recommandé pour Render)
+    sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT")
+    if sa_json:
+        try:
+            sa_info = json.loads(sa_json)
+            creds = ServiceCredentials.from_service_account_info(sa_info, scopes=SHEETS_SCOPES)
+            print("[Sheets] Credentials chargés depuis GOOGLE_SERVICE_ACCOUNT")
+            return creds
+        except Exception as e:
+            print(f"[Sheets] Erreur lecture GOOGLE_SERVICE_ACCOUNT: {e}")
+
+    # Option 2: Fichier local
+    if os.path.exists(SERVICE_ACCOUNT_FILE):
+        creds = ServiceCredentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SHEETS_SCOPES)
+        print("[Sheets] Credentials chargés depuis service_account.json")
+        return creds
+
+    return None
+
+
+def get_sheets_service():
+    """Initialise le client Google Sheets à partir du compte de service."""
+    creds = get_sheets_credentials()
+    if not creds:
+        raise FileNotFoundError(
+            "Credentials Google non trouvés. "
+            "Configurez GOOGLE_SERVICE_ACCOUNT (variable d'env) ou service_account.json"
+        )
+    return build("sheets", "v4", credentials=creds)
+
 
 def extraction_to_row(extractions, source_filename):
     """
@@ -682,181 +723,97 @@ def extraction_to_row(extractions, source_filename):
     return row
 
 
-def _sheet_exists(service, spreadsheet_id):
-    """Vérifie si un Sheet est encore accessible."""
-    try:
-        service.spreadsheets().get(spreadsheetId=spreadsheet_id).execute()
-        return True
-    except Exception:
-        return False
-
-
-def _create_sheet(service, title):
-    """Crée un nouveau Google Sheet et retourne son ID."""
-    spreadsheet = service.spreadsheets().create(body={
-        'properties': {'title': title},
-        'sheets': [{
-            'properties': {
-                'title': 'Fiches Techniques',
-                'gridProperties': {'frozenRowCount': 1}
-            }
-        }]
-    }).execute()
-    return spreadsheet['spreadsheetId']
-
-
-def _format_header(service, spreadsheet_id, num_cols):
-    """Formate le header : gras, fond bleu marine, texte blanc, auto-resize."""
-    try:
-        service.spreadsheets().batchUpdate(
-            spreadsheetId=spreadsheet_id,
-            body={'requests': [
-                {
-                    'repeatCell': {
-                        'range': {'sheetId': 0, 'startRowIndex': 0, 'endRowIndex': 1},
-                        'cell': {
-                            'userEnteredFormat': {
-                                'backgroundColor': {'red': 0.16, 'green': 0.22, 'blue': 0.35},
-                                'textFormat': {'bold': True, 'foregroundColor': {'red': 1, 'green': 1, 'blue': 1}}
-                            }
-                        },
-                        'fields': 'userEnteredFormat(textFormat,backgroundColor)'
-                    }
-                },
-                {
-                    'autoResizeDimensions': {
-                        'dimensions': {'sheetId': 0, 'dimension': 'COLUMNS', 'startIndex': 0, 'endIndex': num_cols}
-                    }
-                }
-            ]}
-        ).execute()
-    except Exception as e:
-        print(f"[Sheets] Formatage header échoué (non bloquant): {e}")
-
-
-def _get_existing_headers(service, spreadsheet_id):
-    """Récupère les headers existants (ligne 1) du Sheet."""
-    try:
-        result = service.spreadsheets().values().get(
-            spreadsheetId=spreadsheet_id,
-            range='Fiches Techniques!1:1'
-        ).execute()
-        values = result.get('values', [])
-        return values[0] if values else []
-    except Exception:
-        return []
-
-
-def export_to_google_sheet(creds, all_rows):
+def append_ft_rows_to_sheet(all_rows):
     """
-    Exporte les lignes vers le Google Sheet persistant.
-    - Si aucun Sheet en session → en crée un nouveau
-    - Si le Sheet existe → append les lignes à la suite
-    - Si le Sheet a été supprimé → en recrée un
-    - Gère les nouvelles colonnes (ajoutées en fin de header)
-    Retourne l'URL du Sheet.
+    Ajoute les lignes dans le Google Sheet fixe (GSHEET_ID).
+    - Si le Sheet est vide → écrit les headers + données
+    - Sinon → append les données à la suite
+    - Gère les nouvelles colonnes automatiquement
     """
+    if not GSHEET_ID:
+        print("[Sheets] GSHEET_ID non configuré, export ignoré.")
+        return
+
     if not all_rows:
-        return None
+        return
 
-    service = build('sheets', 'v4', credentials=creds)
+    try:
+        service = get_sheets_service()
 
-    # Récupérer l'ID du Sheet depuis la session
-    spreadsheet_id = session.get('ft_sheet_id')
-    is_new = False
-
-    # Vérifier que le Sheet existe toujours
-    if spreadsheet_id and not _sheet_exists(service, spreadsheet_id):
-        print(f"[Sheets] Sheet {spreadsheet_id} supprimé, on en recrée un")
-        spreadsheet_id = None
-
-    # Créer si nécessaire
-    if not spreadsheet_id:
-        title = f"ARGOS — Fiches Techniques"
-        spreadsheet_id = _create_sheet(service, title)
-        session['ft_sheet_id'] = spreadsheet_id
-        session.modified = True
-        is_new = True
-        print(f"[Sheets] Nouveau Sheet créé: {spreadsheet_id}")
-
-    # Collecter les headers des nouvelles lignes
-    new_headers = []
-    seen = set()
-    for row in all_rows:
-        for k in row:
-            if k not in seen:
-                new_headers.append(k)
-                seen.add(k)
-
-    if is_new:
-        # Écrire header + données d'un coup
-        sheet_data = [new_headers]
+        # Collecter les headers des nouvelles lignes
+        new_headers = []
+        seen = set()
         for row in all_rows:
-            sheet_data.append([row.get(h, "") for h in new_headers])
+            for k in row:
+                if k not in seen:
+                    new_headers.append(k)
+                    seen.add(k)
 
-        service.spreadsheets().values().update(
-            spreadsheetId=spreadsheet_id,
-            range='Fiches Techniques!A1',
-            valueInputOption='RAW',
-            body={'values': sheet_data}
+        # Lire les headers existants (ligne 1)
+        result = service.spreadsheets().values().get(
+            spreadsheetId=GSHEET_ID,
+            range=f"{GSHEET_SHEET_NAME}!1:1"
         ).execute()
-
-        _format_header(service, spreadsheet_id, len(new_headers))
-    else:
-        # Sheet existant — récupérer les headers actuels
-        existing_headers = _get_existing_headers(service, spreadsheet_id)
+        existing_headers = result.get("values", [[]])[0] if result.get("values") else []
 
         if not existing_headers:
-            # Sheet vide (vidé manuellement?) → écrire tout
+            # Sheet vide → écrire headers + données
             sheet_data = [new_headers]
             for row in all_rows:
                 sheet_data.append([row.get(h, "") for h in new_headers])
 
             service.spreadsheets().values().update(
-                spreadsheetId=spreadsheet_id,
-                range='Fiches Techniques!A1',
-                valueInputOption='RAW',
-                body={'values': sheet_data}
+                spreadsheetId=GSHEET_ID,
+                range=f"{GSHEET_SHEET_NAME}!A1",
+                valueInputOption="RAW",
+                body={"values": sheet_data}
             ).execute()
 
-            _format_header(service, spreadsheet_id, len(new_headers))
+            print(f"[Sheets] Sheet initialisé avec {len(new_headers)} colonnes + {len(all_rows)} lignes")
         else:
             # Vérifier si de nouvelles colonnes doivent être ajoutées
             existing_set = set(existing_headers)
             cols_to_add = [h for h in new_headers if h not in existing_set]
 
             if cols_to_add:
-                # Ajouter les nouveaux headers en fin de la ligne 1
                 start_col = len(existing_headers)
                 col_letter = _col_index_to_letter(start_col)
                 service.spreadsheets().values().update(
-                    spreadsheetId=spreadsheet_id,
-                    range=f'Fiches Techniques!{col_letter}1',
-                    valueInputOption='RAW',
-                    body={'values': [cols_to_add]}
+                    spreadsheetId=GSHEET_ID,
+                    range=f"{GSHEET_SHEET_NAME}!{col_letter}1",
+                    valueInputOption="RAW",
+                    body={"values": [cols_to_add]}
                 ).execute()
                 final_headers = existing_headers + cols_to_add
-                _format_header(service, spreadsheet_id, len(final_headers))
                 print(f"[Sheets] {len(cols_to_add)} nouvelles colonnes ajoutées: {cols_to_add}")
             else:
                 final_headers = existing_headers
 
-            # Append les données dans l'ordre des headers finaux
+            # Trouver la prochaine ligne vide
+            col_a = service.spreadsheets().values().get(
+                spreadsheetId=GSHEET_ID,
+                range=f"{GSHEET_SHEET_NAME}!A:A"
+            ).execute()
+            next_row = len(col_a.get("values", [])) + 1
+
+            # Écrire les données directement sur la bonne ligne
             rows_data = []
             for row in all_rows:
                 rows_data.append([row.get(h, "") for h in final_headers])
 
-            service.spreadsheets().values().append(
-                spreadsheetId=spreadsheet_id,
-                range='Fiches Techniques!A:A',
-                valueInputOption='RAW',
-                insertDataOption='INSERT_ROWS',
-                body={'values': rows_data}
+            target_range = f"{GSHEET_SHEET_NAME}!A{next_row}"
+            service.spreadsheets().values().update(
+                spreadsheetId=GSHEET_ID,
+                range=target_range,
+                valueInputOption="RAW",
+                body={"values": rows_data}
             ).execute()
 
-    url = f"https://docs.google.com/spreadsheets/d/{spreadsheet_id}"
-    print(f"[Sheets] Export OK → {url} ({len(all_rows)} lignes ajoutées)")
-    return url
+            print(f"[Sheets] {len(all_rows)} lignes ajoutées à partir de la ligne {next_row}")
+
+    except Exception as e:
+        print(f"[Sheets] Erreur écriture Google Sheets: {e}")
+        import traceback; traceback.print_exc()
 
 
 def _col_index_to_letter(index):
@@ -1292,8 +1249,7 @@ def extract_ft_batch():
     """
     Endpoint batch pour Fiches Techniques.
     Traite plusieurs PDFs/sources avec le même template FT.
-    Retourne un ZIP + crée un Google Sheet si l'utilisateur est connecté.
-    Le header X-Sheet-Url contient l'URL du Sheet créé.
+    Retourne un ZIP + écrit dans le Google Sheet configuré (Service Account).
     """
     try:
         template_file = request.files.get('template')
@@ -1378,17 +1334,16 @@ def extract_ft_batch():
                 import traceback; traceback.print_exc()
                 results.append({"source": sf.filename, "status": "error", "error": str(e)})
 
-        # Google Sheet — création si connecté
+        # Google Sheet — append via Service Account
         sheet_url = None
         try:
-            creds = get_credentials_from_session()
-            if creds and all_rows:
-                print(f"[ft-batch] Création/Mise à jour Google Sheet ({len(all_rows)} lignes)…")
-                sheet_url = export_to_google_sheet(creds, all_rows)
-                print(f"[ft-batch] Sheet créé: {sheet_url}")
+            if GSHEET_ID and all_rows:
+                print(f"[ft-batch] Export Google Sheet ({len(all_rows)} lignes)…")
+                append_ft_rows_to_sheet(all_rows)
+                sheet_url = f"https://docs.google.com/spreadsheets/d/{GSHEET_ID}"
+                print(f"[ft-batch] Sheet mis à jour: {sheet_url}")
         except Exception as e:
-            print(f"[ft-batch] Création Sheet échouée (non bloquant): {e}")
-            import traceback; traceback.print_exc()
+            print(f"[ft-batch] Export Sheet échoué (non bloquant): {e}")
 
         # ZIP final
         zip_path = Path(tempfile.gettempdir()) / f"argos_ft_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
@@ -1404,11 +1359,8 @@ def extract_ft_batch():
         import shutil
         shutil.rmtree(temp_dir, ignore_errors=True)
 
-        resp = send_file(zip_path, mimetype='application/zip', as_attachment=True,
+        return send_file(zip_path, mimetype='application/zip', as_attachment=True,
                          download_name=zip_path.name)
-        if sheet_url:
-            resp.headers['X-Sheet-Url'] = sheet_url
-        return resp
     except Exception as e:
         print(f"[ft-batch] Erreur globale: {e}")
         import traceback; traceback.print_exc()
@@ -1513,19 +1465,10 @@ def gmail_disconnect():
 
 @app.route('/api/sheet/status')
 def sheet_status():
-    """Retourne l'URL du Sheet FT actuel (si existe)."""
-    sheet_id = session.get('ft_sheet_id')
-    if sheet_id:
-        return jsonify({"has_sheet": True, "url": f"https://docs.google.com/spreadsheets/d/{sheet_id}"})
+    """Retourne l'URL du Sheet FT configuré."""
+    if GSHEET_ID:
+        return jsonify({"has_sheet": True, "url": f"https://docs.google.com/spreadsheets/d/{GSHEET_ID}"})
     return jsonify({"has_sheet": False, "url": None})
-
-
-@app.route('/api/sheet/reset')
-def sheet_reset():
-    """Supprime le lien vers le Sheet actuel. Le prochain batch en créera un nouveau."""
-    session.pop('ft_sheet_id', None)
-    session.modified = True
-    return jsonify({"success": True})
 
 
 @app.route('/api/extract-emails', methods=['POST'])
