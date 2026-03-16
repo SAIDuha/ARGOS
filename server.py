@@ -1065,6 +1065,113 @@ def extract_ft():
         return {"error": str(e)}, 500
 
 
+@app.route('/api/extract-ft-batch', methods=['POST'])
+def extract_ft_batch():
+    """
+    Endpoint batch pour Fiches Techniques.
+    Traite plusieurs PDFs/sources avec le même template FT.
+    Retourne un ZIP contenant un sous-dossier par fiche :
+      - {stem}/{stem}_complet.xml
+      - {stem}/{stem}_simple.xml
+      - {stem}/images/visuel.png, bareme_mesures.png, details_technique.png
+    + _rapport.json à la racine
+    """
+    try:
+        template_file = request.files.get('template')
+        if not template_file:
+            return {"error": "Template requis"}, 400
+        template_content = template_file.read().decode('utf-8')
+        fields, _ = load_xml_template(template_content)
+
+        sources = request.files.getlist('sources')
+        if not sources:
+            return {"error": "Fichiers requis"}, 400
+
+        temp_dir = Path(tempfile.gettempdir()) / f"ft_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        temp_dir.mkdir(exist_ok=True)
+        results = []
+
+        for sf in sources:
+            stem = Path(sf.filename).stem
+            try:
+                print(f"[ft-batch] Traitement: {sf.filename}")
+                source_bytes = sf.read()
+                source_info = load_source_file(source_bytes, sf.filename)
+
+                # 1. Extraction Gemini
+                extractions = extract_with_gemini(fields, source_info)
+                xml_complet = fill_xml_complet(template_content, extractions, sf.filename)
+                xml_simple = fill_xml_simple(template_content, extractions)
+
+                file_dir = temp_dir / stem
+                file_dir.mkdir(exist_ok=True)
+                (file_dir / f"{stem}_complet.xml").write_text(xml_complet, encoding='utf-8')
+                (file_dir / f"{stem}_simple.xml").write_text(xml_simple, encoding='utf-8')
+
+                # 2. Détection sections + crop images (si PDF)
+                named_images = []
+                mime_type, _ = mimetypes.guess_type(sf.filename)
+                if mime_type == "application/pdf" and PYMUPDF_AVAILABLE:
+                    sections = detect_sections_by_text(source_bytes)
+                    print(f"[ft-batch] {sf.filename}: {len(sections)} sections détectées")
+
+                    for section in sections:
+                        field = section["field"]
+                        friendly_name = FT_IMAGE_NAMES.get(field, field)
+                        crops = section["crops"]
+
+                        valid_crops = []
+                        for ci, crop in enumerate(crops):
+                            cropped = crop_pdf_section(
+                                source_bytes, crop["page"],
+                                crop["y_top"], crop["y_bottom"], dpi=220
+                            )
+                            if cropped:
+                                if validate_crop_with_gemini(cropped, field):
+                                    valid_crops.append(cropped)
+                                else:
+                                    print(f"[ft-batch] Crop rejeté: {friendly_name} page {crop['page']+1}")
+
+                        for vi, img_data in enumerate(valid_crops):
+                            suffix = "" if len(valid_crops) == 1 else f"_{vi + 1}"
+                            named_images.append({
+                                "filename": f"{friendly_name}{suffix}.png",
+                                "data": img_data
+                            })
+
+                if named_images:
+                    img_dir = file_dir / "images"
+                    img_dir.mkdir(exist_ok=True)
+                    for img in named_images:
+                        (img_dir / img["filename"]).write_bytes(img["data"])
+
+                results.append({
+                    "source": sf.filename, "status": "success",
+                    "images": len(named_images)
+                })
+            except Exception as e:
+                print(f"[ft-batch] Erreur {sf.filename}: {e}")
+                import traceback; traceback.print_exc()
+                results.append({"source": sf.filename, "status": "error", "error": str(e)})
+
+        # ZIP final
+        zip_path = Path(tempfile.gettempdir()) / f"argos_ft_batch_{datetime.now().strftime('%Y%m%d_%H%M%S')}.zip"
+        with zipfile.ZipFile(zip_path, 'w', compression=zipfile.ZIP_DEFLATED) as zf:
+            for f in temp_dir.rglob("*"):
+                if f.is_file():
+                    zf.write(f, f.relative_to(temp_dir))
+            zf.writestr("_rapport.json", json.dumps({"results": results}, indent=2, ensure_ascii=False))
+
+        import shutil
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        return send_file(zip_path, mimetype='application/zip', as_attachment=True,
+                         download_name=zip_path.name)
+    except Exception as e:
+        print(f"[ft-batch] Erreur globale: {e}")
+        import traceback; traceback.print_exc()
+        return {"error": str(e)}, 500
+
+
 @app.route('/api/extract-batch', methods=['POST'])
 def extract_batch():
     try:
