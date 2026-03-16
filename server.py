@@ -1654,41 +1654,59 @@ def debug_session():
 def test_drive():
     """Endpoint de test pour vérifier que l'upload Drive fonctionne."""
     import traceback
-    results = {"steps": []}
+    results = {"steps": [], "gsheet_id": GSHEET_ID}
 
     # Step 1: Credentials
     try:
         creds = get_sheets_credentials()
         results["steps"].append({"step": "credentials", "ok": creds is not None})
+        if not creds:
+            return jsonify(results)
     except Exception as e:
         results["steps"].append({"step": "credentials", "ok": False, "error": str(e)})
         return jsonify(results)
 
     # Step 2: Drive service
     try:
-        drive = get_drive_service()
+        drive = build("drive", "v3", credentials=creds)
         results["steps"].append({"step": "drive_service", "ok": True})
     except Exception as e:
         results["steps"].append({"step": "drive_service", "ok": False, "error": str(e)})
         return jsonify(results)
 
-    # Step 3: Get Sheet parent folder
+    # Step 3: Get Sheet info from Drive
     try:
-        parent_id = get_sheet_parent_folder_id()
-        results["steps"].append({"step": "parent_folder", "ok": True, "parent_id": parent_id})
+        file_meta = drive.files().get(
+            fileId=GSHEET_ID, fields="id,name,parents", supportsAllDrives=True
+        ).execute()
+        results["steps"].append({"step": "sheet_info", "ok": True, "data": file_meta})
     except Exception as e:
-        results["steps"].append({"step": "parent_folder", "ok": False, "error": str(e), "trace": traceback.format_exc()})
+        results["steps"].append({"step": "sheet_info", "ok": False, "error": str(e), "trace": traceback.format_exc()})
 
-    # Step 4: Upload a tiny test PNG
+    # Step 4: Upload test — NO try/catch, expose raw error
     try:
-        # 1x1 pixel PNG
-        tiny_png = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
-        link = upload_image_to_drive(tiny_png, "ARGOS_test_drive.png")
-        results["steps"].append({"step": "upload_test", "ok": link is not None, "link": link})
-    except Exception as e:
-        results["steps"].append({"step": "upload_test", "ok": False, "error": str(e), "trace": traceback.format_exc()})
+        # 1x1 red pixel PNG (valid)
+        tiny_png = (
+            b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01'
+            b'\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00'
+            b'\x00\x00\x0cIDATx\x9cc\xf8\xcf\xc0\x00\x00\x00\x03'
+            b'\x00\x01\x00\x05\xfe\xd4\x00\x00\x00\x00IEND\xaeB`\x82'
+        )
 
-    results["gsheet_id"] = GSHEET_ID
+        metadata = {"name": "ARGOS_test.png"}
+        parent_id = file_meta.get("parents", [None])[0] if "parents" in file_meta else None
+        if parent_id:
+            metadata["parents"] = [parent_id]
+        results["steps"].append({"step": "upload_metadata", "metadata": metadata, "parent_id": parent_id})
+
+        media = MediaIoBaseUpload(io.BytesIO(tiny_png), mimetype="image/png", resumable=False)
+        created = drive.files().create(
+            body=metadata, media_body=media, fields="id,name,webViewLink"
+        ).execute()
+        results["steps"].append({"step": "upload_result", "ok": True, "data": created})
+    except Exception as e:
+        results["steps"].append({"step": "upload_failed", "ok": False, "error": str(e), "trace": traceback.format_exc()})
+
     return jsonify(results)
 
 
