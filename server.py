@@ -1417,9 +1417,9 @@ def extract_ft_batch():
                 # 3. Collecter la ligne pour le Sheet (avec liens Drive)
                 row = extraction_to_row(extractions, sf.filename)
                 # Remplacer les champs image (oui/non) par les liens Drive
+                # Un lien par ligne dans la cellule pour que chacun soit cliquable
                 for field_name, links in drive_links.items():
-                    if field_name in row:
-                        row[field_name] = " | ".join(links)
+                    row[field_name] = "\n".join(links)
                 all_rows.append(row)
 
                 results.append({
