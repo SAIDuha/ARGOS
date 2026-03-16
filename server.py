@@ -769,6 +769,7 @@ def upload_image_to_drive(image_bytes, filename, mime_type="image/png"):
         return link
     except Exception as e:
         print(f"[Drive] Upload échoué pour {filename}: {e}")
+        import traceback; traceback.print_exc()
         return None
 
 
@@ -1647,6 +1648,48 @@ def debug_session():
         "has_credentials": 'gmail_credentials' in session,
         "session_keys": list(session.keys())
     })
+
+
+@app.route('/debug/test-drive')
+def test_drive():
+    """Endpoint de test pour vérifier que l'upload Drive fonctionne."""
+    import traceback
+    results = {"steps": []}
+
+    # Step 1: Credentials
+    try:
+        creds = get_sheets_credentials()
+        results["steps"].append({"step": "credentials", "ok": creds is not None})
+    except Exception as e:
+        results["steps"].append({"step": "credentials", "ok": False, "error": str(e)})
+        return jsonify(results)
+
+    # Step 2: Drive service
+    try:
+        drive = get_drive_service()
+        results["steps"].append({"step": "drive_service", "ok": True})
+    except Exception as e:
+        results["steps"].append({"step": "drive_service", "ok": False, "error": str(e)})
+        return jsonify(results)
+
+    # Step 3: Get Sheet parent folder
+    try:
+        parent_id = get_sheet_parent_folder_id()
+        results["steps"].append({"step": "parent_folder", "ok": True, "parent_id": parent_id})
+    except Exception as e:
+        results["steps"].append({"step": "parent_folder", "ok": False, "error": str(e), "trace": traceback.format_exc()})
+
+    # Step 4: Upload a tiny test PNG
+    try:
+        # 1x1 pixel PNG
+        tiny_png = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x02\x00\x00\x00\x90wS\xde\x00\x00\x00\x0cIDATx\x9cc\xf8\x0f\x00\x00\x01\x01\x00\x05\x18\xd8N\x00\x00\x00\x00IEND\xaeB`\x82'
+        link = upload_image_to_drive(tiny_png, "ARGOS_test_drive.png")
+        results["steps"].append({"step": "upload_test", "ok": link is not None, "link": link})
+    except Exception as e:
+        results["steps"].append({"step": "upload_test", "ok": False, "error": str(e), "trace": traceback.format_exc()})
+
+    results["gsheet_id"] = GSHEET_ID
+    return jsonify(results)
 
 
 if __name__ == '__main__':
