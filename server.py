@@ -1,4 +1,5 @@
 import os
+import io
 import json
 import base64
 import mimetypes
@@ -23,6 +24,7 @@ from google.oauth2.credentials import Credentials
 from google.oauth2.service_account import Credentials as ServiceCredentials
 from google_auth_oauthlib.flow import Flow
 from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseUpload
 from google.auth.transport.requests import Request
 
 # ============================================================
@@ -34,11 +36,14 @@ GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
 GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
 GMAIL_SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
 
-# --- Google Sheets (Service Account) ---
+# --- Google Sheets & Drive (Service Account) ---
 GSHEET_ID = os.environ.get("GSHEET_ID", "")
 GSHEET_SHEET_NAME = os.environ.get("GSHEET_SHEET_NAME", "Fiches Techniques")
 SERVICE_ACCOUNT_FILE = "service_account.json"
-SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+GOOGLE_SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
 
 genai.configure(api_key=GEMINI_API_KEY)
 model = genai.GenerativeModel(MODEL_NAME)
@@ -670,7 +675,7 @@ def get_sheets_credentials():
     if sa_json:
         try:
             sa_info = json.loads(sa_json)
-            creds = ServiceCredentials.from_service_account_info(sa_info, scopes=SHEETS_SCOPES)
+            creds = ServiceCredentials.from_service_account_info(sa_info, scopes=GOOGLE_SCOPES)
             print("[Sheets] Credentials chargés depuis GOOGLE_SERVICE_ACCOUNT")
             return creds
         except Exception as e:
@@ -678,7 +683,7 @@ def get_sheets_credentials():
 
     # Option 2: Fichier local
     if os.path.exists(SERVICE_ACCOUNT_FILE):
-        creds = ServiceCredentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SHEETS_SCOPES)
+        creds = ServiceCredentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=GOOGLE_SCOPES)
         print("[Sheets] Credentials chargés depuis service_account.json")
         return creds
 
@@ -694,6 +699,77 @@ def get_sheets_service():
             "Configurez GOOGLE_SERVICE_ACCOUNT (variable d'env) ou service_account.json"
         )
     return build("sheets", "v4", credentials=creds)
+
+
+def get_drive_service():
+    """Initialise le client Google Drive à partir du compte de service."""
+    creds = get_sheets_credentials()
+    if not creds:
+        raise FileNotFoundError("Credentials Google non trouvés pour Drive.")
+    return build("drive", "v3", credentials=creds)
+
+
+# Cache du dossier parent du Sheet (pour y stocker les images)
+_DRIVE_PARENT_FOLDER_ID = None
+
+
+def get_sheet_parent_folder_id():
+    """Récupère le dossier parent du Google Sheet sur Drive."""
+    global _DRIVE_PARENT_FOLDER_ID
+    if _DRIVE_PARENT_FOLDER_ID is not None:
+        return _DRIVE_PARENT_FOLDER_ID
+    try:
+        drive = get_drive_service()
+        file_meta = drive.files().get(
+            fileId=GSHEET_ID, fields="parents", supportsAllDrives=True
+        ).execute()
+        parents = file_meta.get("parents")
+        _DRIVE_PARENT_FOLDER_ID = parents[0] if parents else ""
+    except Exception as e:
+        print(f"[Drive] Impossible de récupérer le dossier parent: {e}")
+        _DRIVE_PARENT_FOLDER_ID = ""
+    return _DRIVE_PARENT_FOLDER_ID or None
+
+
+def upload_image_to_drive(image_bytes, filename, mime_type="image/png"):
+    """
+    Upload une image (bytes) vers Google Drive dans le même dossier que le Sheet.
+    Retourne le lien Drive ou None.
+    """
+    try:
+        drive = get_drive_service()
+        parent_id = get_sheet_parent_folder_id()
+
+        metadata = {"name": filename}
+        if parent_id:
+            metadata["parents"] = [parent_id]
+
+        media = MediaIoBaseUpload(io.BytesIO(image_bytes), mimetype=mime_type, resumable=False)
+        created = drive.files().create(
+            body=metadata, media_body=media,
+            fields="id", supportsAllDrives=True
+        ).execute()
+
+        file_id = created.get("id")
+        if not file_id:
+            return None
+
+        # Rendre le fichier accessible via lien
+        try:
+            drive.permissions().create(
+                fileId=file_id,
+                body={"type": "anyone", "role": "reader"},
+                supportsAllDrives=True
+            ).execute()
+        except Exception:
+            pass  # pas grave si ça échoue
+
+        link = f"https://drive.google.com/file/d/{file_id}/view"
+        print(f"[Drive] Upload OK: {filename} → {link}")
+        return link
+    except Exception as e:
+        print(f"[Drive] Upload échoué pour {filename}: {e}")
+        return None
 
 
 def extraction_to_row(extractions, source_filename):
@@ -1284,12 +1360,9 @@ def extract_ft_batch():
                 (file_dir / f"{stem}_complet.xml").write_text(xml_complet, encoding='utf-8')
                 (file_dir / f"{stem}_simple.xml").write_text(xml_simple, encoding='utf-8')
 
-                # Collecter la ligne pour le Sheet
-                row = extraction_to_row(extractions, sf.filename)
-                all_rows.append(row)
-
-                # 2. Détection sections + crop images (si PDF)
+                # 2. Détection sections + crop images (si PDF) + upload Drive
                 named_images = []
+                drive_links = {}  # field_name → [drive_link, ...]
                 mime_type, _ = mimetypes.guess_type(sf.filename)
                 if mime_type == "application/pdf" and PYMUPDF_AVAILABLE:
                     sections = detect_sections_by_text(source_bytes)
@@ -1314,16 +1387,34 @@ def extract_ft_batch():
 
                         for vi, img_data in enumerate(valid_crops):
                             suffix = "" if len(valid_crops) == 1 else f"_{vi + 1}"
+                            img_filename = f"{friendly_name}{suffix}.png"
                             named_images.append({
-                                "filename": f"{friendly_name}{suffix}.png",
+                                "filename": img_filename,
                                 "data": img_data
                             })
+
+                            # Upload sur Drive
+                            if GSHEET_ID:
+                                drive_name = f"{stem}_{img_filename}"
+                                link = upload_image_to_drive(img_data, drive_name)
+                                if link:
+                                    if field not in drive_links:
+                                        drive_links[field] = []
+                                    drive_links[field].append(link)
 
                 if named_images:
                     img_dir = file_dir / "images"
                     img_dir.mkdir(exist_ok=True)
                     for img in named_images:
                         (img_dir / img["filename"]).write_bytes(img["data"])
+
+                # 3. Collecter la ligne pour le Sheet (avec liens Drive)
+                row = extraction_to_row(extractions, sf.filename)
+                # Remplacer les champs image (oui/non) par les liens Drive
+                for field_name, links in drive_links.items():
+                    if field_name in row:
+                        row[field_name] = " | ".join(links)
+                all_rows.append(row)
 
                 results.append({
                     "source": sf.filename, "status": "success",
