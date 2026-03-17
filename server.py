@@ -778,95 +778,99 @@ def upload_image_to_drive(image_bytes, filename, mime_type="image/png"):
         return None
 
 
-def extraction_to_row(extractions, source_filename):
+def extraction_to_expanded(extractions, source_filename):
     """
-    Transforme le dict d'extractions Gemini en un dict plat (1 ligne Sheet).
-    - Champs simples → une colonne par champ
-    - Groupes (champRGRS) → une colonne par sous-champ, instances séparées par des retours à la ligne
-    - Les champs vides sont ignorés (pas de colonne créée)
+    Retourne un dict structuré pour le Sheet :
+    - "simple": dict des champs simples (1 seule valeur)
+    - "groups": dict des groupes → liste d'instances
+    - "num_rows": nombre de lignes nécessaires (max d'instances parmi les groupes, min 1)
+    - "group_columns": set des noms de colonnes qui sont des groupes
     """
-    row = {"fichier_source": source_filename}
+    simple = {"fichier_source": source_filename}
+    groups = {}  # nom_groupe → [{"sous_champ": "val"}, ...]
+    group_columns = set()
+
     for ext in extractions.get("extractions", []):
         nom = ext.get("nom", "")
         if ext.get("type") == "groupe":
             instances = ext.get("instances", [])
             if instances:
+                # Collecter les sous-clés
                 sub_keys = []
                 for inst in instances:
                     for k in inst:
                         if k not in sub_keys:
                             sub_keys.append(k)
-                for sk in sub_keys:
-                    col_name = f"{nom}__{sk}"
-                    values = [str(inst.get(sk, "")) for inst in instances]
-                    joined = "\n".join(v for v in values if v)
-                    if joined:
-                        row[col_name] = joined
+                            group_columns.add(f"{nom}__{k}")
+                groups[nom] = {"instances": instances, "sub_keys": sub_keys}
         else:
             v = ext.get("valeur_defaut", "")
             val = ", ".join(v) if isinstance(v, list) else str(v) if v else ""
             if val:
-                row[nom] = val
-    return row
+                simple[nom] = val
+
+    max_instances = max((len(g["instances"]) for g in groups.values()), default=0)
+    num_rows = max(1, max_instances)
+
+    return {
+        "simple": simple,
+        "groups": groups,
+        "num_rows": num_rows,
+        "group_columns": group_columns,
+    }
 
 
-def append_ft_rows_to_sheet(all_rows):
+def append_ft_rows_to_sheet(all_expanded):
     """
-    Ajoute les lignes dans le Google Sheet fixe (GSHEET_ID).
-    - Si le Sheet est vide → écrit les headers + données
-    - Sinon → append les données à la suite
-    - Gère les nouvelles colonnes automatiquement
+    Ajoute les données dans le Google Sheet fixe (GSHEET_ID).
+    all_expanded: liste de dicts retournés par extraction_to_expanded()
+    - Chaque produit occupe N lignes (N = max d'instances de groupes)
+    - Les champs simples sont écrits sur la 1ère ligne et fusionnés verticalement
+    - Les groupes sont éclatés : 1 instance par ligne
     """
-    if not GSHEET_ID:
-        print("[Sheets] GSHEET_ID non configuré, export ignoré.")
-        return
-
-    if not all_rows:
+    if not GSHEET_ID or not all_expanded:
         return
 
     try:
         service = get_sheets_service()
 
-        # Collecter les headers des nouvelles lignes
-        new_headers = []
+        # 1. Collecter tous les headers
+        all_headers = []
         seen = set()
-        for row in all_rows:
-            for k in row:
+        all_group_cols = set()
+        for exp in all_expanded:
+            for k in exp["simple"]:
                 if k not in seen:
-                    new_headers.append(k)
+                    all_headers.append(k)
                     seen.add(k)
+            all_group_cols.update(exp["group_columns"])
+            for gname, gdata in exp["groups"].items():
+                for sk in gdata["sub_keys"]:
+                    col = f"{gname}__{sk}"
+                    if col not in seen:
+                        all_headers.append(col)
+                        seen.add(col)
 
-        # Lire les headers existants (ligne 2 — ligne 1 = numéros)
+        # 2. Lire les headers existants (ligne 2)
         result = service.spreadsheets().values().get(
             spreadsheetId=GSHEET_ID,
             range=f"{GSHEET_SHEET_NAME}!2:2"
         ).execute()
         existing_headers = result.get("values", [[]])[0] if result.get("values") else []
 
-        if not existing_headers:
-            # Sheet vide → écrire numéros + headers + données
-            num_row = [str(i + 1) for i in range(len(new_headers))]
-            sheet_data = [num_row, new_headers]
-            for row in all_rows:
-                sheet_data.append([row.get(h, "") for h in new_headers])
+        is_new = not existing_headers
 
-            service.spreadsheets().values().update(
-                spreadsheetId=GSHEET_ID,
-                range=f"{GSHEET_SHEET_NAME}!A1",
-                valueInputOption="RAW",
-                body={"values": sheet_data}
-            ).execute()
-
-            print(f"[Sheets] Sheet initialisé avec {len(new_headers)} colonnes + {len(all_rows)} lignes")
+        if is_new:
+            final_headers = all_headers
+            num_row = [str(i + 1) for i in range(len(final_headers))]
+            start_row = 3  # ligne 1 = numéros, ligne 2 = headers, données à partir de 3
         else:
-            # Vérifier si de nouvelles colonnes doivent être ajoutées
+            # Ajouter nouvelles colonnes si nécessaire
             existing_set = set(existing_headers)
-            cols_to_add = [h for h in new_headers if h not in existing_set]
-
+            cols_to_add = [h for h in all_headers if h not in existing_set]
             if cols_to_add:
                 start_col = len(existing_headers)
                 col_letter = _col_index_to_letter(start_col)
-                # Ajouter numéros + noms sur les 2 lignes
                 new_nums = [str(start_col + i + 1) for i in range(len(cols_to_add))]
                 service.spreadsheets().values().update(
                     spreadsheetId=GSHEET_ID,
@@ -875,7 +879,6 @@ def append_ft_rows_to_sheet(all_rows):
                     body={"values": [new_nums, cols_to_add]}
                 ).execute()
                 final_headers = existing_headers + cols_to_add
-                print(f"[Sheets] {len(cols_to_add)} nouvelles colonnes ajoutées: {cols_to_add}")
             else:
                 final_headers = existing_headers
 
@@ -884,22 +887,97 @@ def append_ft_rows_to_sheet(all_rows):
                 spreadsheetId=GSHEET_ID,
                 range=f"{GSHEET_SHEET_NAME}!A:A"
             ).execute()
-            next_row = len(col_a.get("values", [])) + 1
+            start_row = len(col_a.get("values", [])) + 1
 
-            # Écrire les données directement sur la bonne ligne
-            rows_data = []
-            for row in all_rows:
-                rows_data.append([row.get(h, "") for h in final_headers])
+        # Index des colonnes par nom
+        col_index = {h: i for i, h in enumerate(final_headers)}
 
-            target_range = f"{GSHEET_SHEET_NAME}!A{next_row}"
+        # 3. Construire les lignes de données + tracking des merges
+        sheet_rows = []
+        merge_requests = []
+
+        # Récupérer le sheetId
+        try:
+            spreadsheet = service.spreadsheets().get(spreadsheetId=GSHEET_ID).execute()
+            sheet_id = spreadsheet['sheets'][0]['properties']['sheetId']
+        except Exception:
+            sheet_id = 0
+
+        current_row = start_row  # 1-indexed (row dans le Sheet)
+
+        for exp in all_expanded:
+            num_rows = exp["num_rows"]
+
+            for i in range(num_rows):
+                row_data = [""] * len(final_headers)
+
+                # Champs simples : seulement sur la première ligne
+                if i == 0:
+                    for k, v in exp["simple"].items():
+                        if k in col_index:
+                            row_data[col_index[k]] = v
+
+                # Groupes : une instance par ligne
+                for gname, gdata in exp["groups"].items():
+                    instances = gdata["instances"]
+                    if i < len(instances):
+                        for sk in gdata["sub_keys"]:
+                            col = f"{gname}__{sk}"
+                            if col in col_index:
+                                val = str(instances[i].get(sk, ""))
+                                row_data[col_index[col]] = val
+
+                sheet_rows.append(row_data)
+
+            # Merge requests pour les champs simples (si plus d'1 ligne)
+            if num_rows > 1:
+                for k in exp["simple"]:
+                    if k in col_index:
+                        ci = col_index[k]
+                        merge_requests.append({
+                            'mergeCells': {
+                                'range': {
+                                    'sheetId': sheet_id,
+                                    'startRowIndex': current_row - 1,  # 0-indexed
+                                    'endRowIndex': current_row - 1 + num_rows,
+                                    'startColumnIndex': ci,
+                                    'endColumnIndex': ci + 1
+                                },
+                                'mergeType': 'MERGE_ALL'
+                            }
+                        })
+
+            current_row += num_rows
+
+        # 4. Écrire les données
+        if is_new:
+            num_row = [str(i + 1) for i in range(len(final_headers))]
+            all_data = [num_row, final_headers] + sheet_rows
+            service.spreadsheets().values().update(
+                spreadsheetId=GSHEET_ID,
+                range=f"{GSHEET_SHEET_NAME}!A1",
+                valueInputOption="RAW",
+                body={"values": all_data}
+            ).execute()
+        else:
+            target_range = f"{GSHEET_SHEET_NAME}!A{start_row}"
             service.spreadsheets().values().update(
                 spreadsheetId=GSHEET_ID,
                 range=target_range,
                 valueInputOption="RAW",
-                body={"values": rows_data}
+                body={"values": sheet_rows}
             ).execute()
 
-            print(f"[Sheets] {len(all_rows)} lignes ajoutées à partir de la ligne {next_row}")
+        # 5. Appliquer les fusions de cellules
+        if merge_requests:
+            service.spreadsheets().batchUpdate(
+                spreadsheetId=GSHEET_ID,
+                body={'requests': merge_requests}
+            ).execute()
+            print(f"[Sheets] {len(merge_requests)} cellules fusionnées")
+
+        total_rows = sum(e["num_rows"] for e in all_expanded)
+        print(f"[Sheets] {total_rows} lignes écrites à partir de la ligne {start_row}")
 
     except Exception as e:
         print(f"[Sheets] Erreur écriture Google Sheets: {e}")
@@ -1422,16 +1500,16 @@ def extract_ft_batch():
                     for img in named_images:
                         (img_dir / img["filename"]).write_bytes(img["data"])
 
-                # 3. Collecter la ligne pour le Sheet (avec liens Drive)
-                row = extraction_to_row(extractions, sf.filename)
-                # Supprimer les champs email/réclamation qui n'ont rien à faire en mode FT
+                # 3. Collecter les données pour le Sheet (avec liens Drive)
+                expanded = extraction_to_expanded(extractions, sf.filename)
+                # Supprimer les champs email/réclamation
                 for unwanted in ('motif', 'type_sollicitation', 'nature_demande', 'nature_reclamation'):
-                    row.pop(unwanted, None)
+                    expanded["simple"].pop(unwanted, None)
                 # Remplacer les champs image (oui/non) par les liens Drive
                 if drive_links:
                     for field_name, links in drive_links.items():
-                        row[field_name] = "\n".join(links)
-                all_rows.append(row)
+                        expanded["simple"][field_name] = "\n".join(links)
+                all_rows.append(expanded)
 
                 results.append({
                     "source": sf.filename, "status": "success",
