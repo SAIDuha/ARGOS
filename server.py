@@ -836,16 +836,17 @@ def append_ft_rows_to_sheet(all_rows):
                     new_headers.append(k)
                     seen.add(k)
 
-        # Lire les headers existants (ligne 1)
+        # Lire les headers existants (ligne 2 — ligne 1 = numéros)
         result = service.spreadsheets().values().get(
             spreadsheetId=GSHEET_ID,
-            range=f"{GSHEET_SHEET_NAME}!1:1"
+            range=f"{GSHEET_SHEET_NAME}!2:2"
         ).execute()
         existing_headers = result.get("values", [[]])[0] if result.get("values") else []
 
         if not existing_headers:
-            # Sheet vide → écrire headers + données
-            sheet_data = [new_headers]
+            # Sheet vide → écrire numéros + headers + données
+            num_row = [str(i + 1) for i in range(len(new_headers))]
+            sheet_data = [num_row, new_headers]
             for row in all_rows:
                 sheet_data.append([row.get(h, "") for h in new_headers])
 
@@ -865,11 +866,13 @@ def append_ft_rows_to_sheet(all_rows):
             if cols_to_add:
                 start_col = len(existing_headers)
                 col_letter = _col_index_to_letter(start_col)
+                # Ajouter numéros + noms sur les 2 lignes
+                new_nums = [str(start_col + i + 1) for i in range(len(cols_to_add))]
                 service.spreadsheets().values().update(
                     spreadsheetId=GSHEET_ID,
                     range=f"{GSHEET_SHEET_NAME}!{col_letter}1",
                     valueInputOption="RAW",
-                    body={"values": [cols_to_add]}
+                    body={"values": [new_nums, cols_to_add]}
                 ).execute()
                 final_headers = existing_headers + cols_to_add
                 print(f"[Sheets] {len(cols_to_add)} nouvelles colonnes ajoutées: {cols_to_add}")
