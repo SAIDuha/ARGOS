@@ -321,6 +321,7 @@ RÈGLES GÉNÉRALES
 ══════════════════════════════════════════
 - Respecte STRICTEMENT les valeurs autorisées pour chaque champ.
 - Pour les GROUPES, retourne une instance par occurrence détectée.
+- IMPORTANT : Respecte STRICTEMENT l'ordre d'apparition dans le document. Les instances d'un groupe doivent être retournées dans le même ordre que dans le document source (de haut en bas, de gauche à droite).
 - Si une information est absente, utilise une chaîne vide.
 
 RÉPONDS UNIQUEMENT EN JSON valide :
