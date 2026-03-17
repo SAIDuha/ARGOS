@@ -1424,6 +1424,9 @@ def extract_ft_batch():
 
                 # 3. Collecter la ligne pour le Sheet (avec liens Drive)
                 row = extraction_to_row(extractions, sf.filename)
+                # Supprimer les champs email/réclamation qui n'ont rien à faire en mode FT
+                for unwanted in ('motif', 'type_sollicitation', 'nature_demande', 'nature_reclamation'):
+                    row.pop(unwanted, None)
                 # Remplacer les champs image (oui/non) par les liens Drive
                 # Un lien par ligne dans la cellule pour que chacun soit cliquable
                 for field_name, links in drive_links.items():
