@@ -780,96 +780,123 @@ def upload_image_to_drive(image_bytes, filename, mime_type="image/png"):
         return None
 
 
-def extract_codes_order_from_pdf(pdf_bytes):
+def extract_codes_table_from_pdf(pdf_bytes):
     """
-    Extrait l'ordre exact des codes articles depuis le PDF avec PyMuPDF.
-    Lit le texte page par page et cherche les nombres à 5+ chiffres
-    qui apparaissent dans la section "Codes articles".
-    Retourne une liste ordonnée de codes (strings).
+    Extrait les paires (code, libellé) directement depuis le PDF avec PyMuPDF.
+    Lit les tableaux de la section "Codes articles par coloris" ligne par ligne.
+    Retourne une liste de dicts [{"code": "62691", "libelle_long": "Blouson Orange HV/Gris PC"}, ...]
+    dans l'ORDRE EXACT du document.
     """
     if not PYMUPDF_AVAILABLE:
         return []
     try:
         doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        codes = []
-        in_section = False
+        pairs = []
 
         for page in doc:
-            blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
-            for block in blocks:
-                if block.get("type") != 0:
-                    continue
-                for line in block.get("lines", []):
-                    line_text = ""
-                    for span in line.get("spans", []):
-                        line_text += span["text"]
-                    line_text = line_text.strip()
-
-                    # Détecter début de section codes articles
-                    if "codes articles" in line_text.lower() or "code" in line_text.lower() and "libellé" in line_text.lower():
-                        in_section = True
-                        continue
-
-                    # Détecter fin de section (autre titre)
-                    if in_section and line_text and not any(c.isdigit() for c in line_text):
-                        cleaned = line_text.strip().rstrip(":").strip().lower()
-                        if cleaned in ("visuel", "matière", "matiere", "descriptif", "normes",
-                                       "barème de mesures", "bareme de mesures", "détails technique",
-                                       "details technique", "nomenclature", "historique"):
-                            in_section = False
+            # Essayer d'extraire les tableaux via find_tables (PyMuPDF >=1.23)
+            try:
+                tabs = page.find_tables()
+                for tab in tabs:
+                    data = tab.extract()
+                    for row in data:
+                        if not row or len(row) < 2:
                             continue
-
-                    if in_section:
-                        # Chercher des codes numériques (5+ chiffres)
-                        for match in re.findall(r'\b(\d{5,})\b', line_text):
-                            if match not in codes:
-                                codes.append(match)
+                        cell0 = (row[0] or "").strip()
+                        cell1 = (row[1] or "").strip()
+                        # Un code = 5+ chiffres
+                        if re.match(r'^\d{5,}$', cell0) and cell1:
+                            pairs.append({"code": cell0, "libelle_long": cell1})
+            except AttributeError:
+                # PyMuPDF trop ancien, pas de find_tables → fallback text
+                pass
 
         doc.close()
-        if codes:
-            print(f"[PDF] Codes articles extraits dans l'ordre: {codes}")
-        return codes
+
+        # Si find_tables n'a rien trouvé, fallback sur extraction texte
+        if not pairs:
+            pairs = _extract_codes_by_text(pdf_bytes)
+
+        if pairs:
+            print(f"[PDF] Codes articles extraits: {[(p['code'], p['libelle_long'][:30]) for p in pairs]}")
+        return pairs
     except Exception as e:
         print(f"[PDF] Erreur extraction codes: {e}")
         return []
 
 
-def reorder_group_instances(extractions, group_name, ordered_keys, key_field="code"):
+def _extract_codes_by_text(pdf_bytes):
     """
-    Réordonne les instances d'un groupe dans les extractions Gemini
-    pour qu'elles suivent l'ordre donné par ordered_keys.
-    Les instances dont la clé n'est pas dans ordered_keys sont ajoutées à la fin.
+    Fallback : extrait les codes articles par analyse de texte ligne par ligne.
+    Cherche les lignes avec un code 5+ chiffres suivi d'un libellé.
     """
+    try:
+        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+        pairs = []
+        in_section = False
+
+        for page in doc:
+            blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
+            lines = []
+
+            # Collecter toutes les lignes avec leur position Y
+            for block in blocks:
+                if block.get("type") != 0:
+                    continue
+                for line in block.get("lines", []):
+                    text_parts = []
+                    y = line["bbox"][1]
+                    for span in line.get("spans", []):
+                        text_parts.append({"text": span["text"], "x": span["bbox"][0]})
+                    full_text = "".join(p["text"] for p in text_parts).strip()
+                    if full_text:
+                        lines.append({"y": y, "text": full_text, "parts": text_parts})
+
+            for ln in lines:
+                text = ln["text"].lower().strip()
+
+                if "codes articles" in text:
+                    in_section = True
+                    continue
+
+                # Fin de section
+                if in_section:
+                    cleaned = text.rstrip(":").strip()
+                    if cleaned in ("visuel", "matière", "matiere", "descriptif", "normes",
+                                   "barème de mesures", "bareme de mesures", "détails technique",
+                                   "details technique", "nomenclature", "historique"):
+                        in_section = False
+                        continue
+
+                if in_section:
+                    # Chercher "CODE    LIBELLE" sur la même ligne
+                    m = re.match(r'^(\d{5,})\s+(.+)', ln["text"].strip())
+                    if m:
+                        code = m.group(1)
+                        libelle = m.group(2).strip()
+                        if code not in [p["code"] for p in pairs]:
+                            pairs.append({"code": code, "libelle_long": libelle})
+
+        doc.close()
+        return pairs
+    except Exception as e:
+        print(f"[PDF] Fallback text extraction failed: {e}")
+        return []
+
+
+def override_codes_articles(extractions, pdf_pairs):
+    """
+    Remplace complètement les instances codes_articles de Gemini
+    par les paires code/libellé extraites directement du PDF.
+    """
+    if not pdf_pairs:
+        return
+
     for ext in extractions.get("extractions", []):
-        if ext.get("nom") == group_name and ext.get("type") == "groupe":
-            instances = ext.get("instances", [])
-            if not instances or not ordered_keys:
-                return
-
-            # Créer un index par clé
-            by_key = {}
-            for inst in instances:
-                k = str(inst.get(key_field, "")).strip()
-                if k not in by_key:
-                    by_key[k] = inst
-
-            # Reconstruire la liste dans l'ordre du PDF
-            reordered = []
-            used = set()
-            for k in ordered_keys:
-                if k in by_key and k not in used:
-                    reordered.append(by_key[k])
-                    used.add(k)
-
-            # Ajouter les instances restantes (pas dans le PDF)
-            for inst in instances:
-                k = str(inst.get(key_field, "")).strip()
-                if k not in used:
-                    reordered.append(inst)
-                    used.add(k)
-
-            ext["instances"] = reordered
-            print(f"[Reorder] {group_name}: {[str(inst.get(key_field, '')) for inst in reordered]}")
+        if ext.get("nom") == "codes_articles" and ext.get("type") == "groupe":
+            old_count = len(ext.get("instances", []))
+            ext["instances"] = pdf_pairs
+            print(f"[Override] codes_articles: {old_count} instances Gemini → {len(pdf_pairs)} instances PDF")
             return
 
 
@@ -1509,12 +1536,12 @@ def extract_ft_batch():
                 # 1. Extraction Gemini
                 extractions = extract_with_gemini(fields, source_info)
 
-                # 1b. Réordonner les codes articles selon l'ordre du PDF
+                # 1b. Extraire les codes articles directement du PDF (ordre + libellés exacts)
                 mime_type_src, _ = mimetypes.guess_type(sf.filename)
                 if mime_type_src == "application/pdf" and PYMUPDF_AVAILABLE:
-                    pdf_codes_order = extract_codes_order_from_pdf(source_bytes)
-                    if pdf_codes_order:
-                        reorder_group_instances(extractions, "codes_articles", pdf_codes_order, "code")
+                    pdf_pairs = extract_codes_table_from_pdf(source_bytes)
+                    if pdf_pairs:
+                        override_codes_articles(extractions, pdf_pairs)
 
                 xml_complet = fill_xml_complet(template_content, extractions, sf.filename)
                 xml_simple = fill_xml_simple(template_content, extractions)
