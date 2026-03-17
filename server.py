@@ -118,6 +118,7 @@ def parse_champRGRS(rgrs_elem):
         "type": "groupe",
         "nom": rgrs_elem.findtext("Nom", "").strip(),
         "multiple": rgrs_elem.findtext("Multiple", "false").strip().lower() == "true",
+        "parLigne": rgrs_elem.findtext("parLigne", "non").strip().lower() == "oui",
         "description": rgrs_elem.findtext("Description", "").strip(),
         "sous_champs": [],
         "descriptions_externes": []
@@ -778,16 +779,26 @@ def upload_image_to_drive(image_bytes, filename, mime_type="image/png"):
         return None
 
 
-def extraction_to_row(extractions, source_filename):
+def extraction_to_row(extractions, source_filename, par_ligne_groups=None):
     """
-    Transforme le dict d'extractions Gemini en un dict plat (1 ligne Sheet).
+    Transforme le dict d'extractions Gemini en une LISTE de dicts (lignes Sheet).
     - Champs simples → une colonne par champ
-    - Groupe 'nomenclature' → UNE SEULE colonne fusionnée
-      Format: [ acc || fourn || desc || coloris ] par ligne
-    - Autres groupes → une colonne par sous-champ (séparés par retour à la ligne)
-    - Les champs vides sont ignorés
+    - Groupes avec parLigne=oui → la ligne est DUPLIQUÉE pour chaque instance
+      (sous-champs en colonnes séparées, une instance par ligne)
+    - Groupe 'nomenclature' → une seule colonne fusionnée (blocs [ ... || ... ])
+    - Autres groupes → colonnes séparées par sous-champ, valeurs jointes par retour à la ligne
+    Retourne une liste de dicts.
     """
-    row = {"fichier_source": source_filename}
+    if par_ligne_groups is None:
+        par_ligne_groups = set()
+
+    # 1. Collecter les champs simples
+    base_row = {"fichier_source": source_filename}
+
+    # 2. Collecter tous les champs
+    par_ligne_data = {}  # nom_groupe → [instances]
+    par_ligne_keys = {}  # nom_groupe → [sub_keys]
+
     for ext in extractions.get("extractions", []):
         nom = ext.get("nom", "")
         if ext.get("type") == "groupe":
@@ -801,7 +812,11 @@ def extraction_to_row(extractions, source_filename):
                     if k not in sub_keys:
                         sub_keys.append(k)
 
-            if nom == "nomenclature":
+            if nom in par_ligne_groups:
+                # parLigne=oui → on garde les instances pour éclater après
+                par_ligne_data[nom] = instances
+                par_ligne_keys[nom] = sub_keys
+            elif nom == "nomenclature":
                 # Nomenclature → une seule colonne avec blocs
                 blocks = []
                 for inst in instances:
@@ -810,21 +825,44 @@ def extraction_to_row(extractions, source_filename):
                     blocks.append(block)
                 joined = "\n".join(blocks)
                 if joined:
-                    row[nom] = joined
+                    base_row[nom] = joined
             else:
-                # Autres groupes → colonnes séparées par sous-champ
+                # Autres groupes → colonnes séparées
                 for sk in sub_keys:
                     col_name = f"{nom}__{sk}"
                     values = [str(inst.get(sk, "")) for inst in instances]
                     joined = "\n".join(v for v in values if v)
                     if joined:
-                        row[col_name] = joined
+                        base_row[col_name] = joined
         else:
             v = ext.get("valeur_defaut", "")
             val = ", ".join(v) if isinstance(v, list) else str(v) if v else ""
             if val:
-                row[nom] = val
-    return row
+                base_row[nom] = val
+
+    # 3. Éclater les lignes si parLigne groups existent
+    if not par_ligne_data:
+        return [base_row]
+
+    # Trouver le max d'instances parmi les groupes parLigne
+    max_instances = max(len(insts) for insts in par_ligne_data.values())
+    if max_instances == 0:
+        return [base_row]
+
+    rows = []
+    for i in range(max_instances):
+        row = dict(base_row)  # copie des champs simples (dupliqués sur chaque ligne)
+        for gname, instances in par_ligne_data.items():
+            sub_keys = par_ligne_keys[gname]
+            if i < len(instances):
+                for sk in sub_keys:
+                    row[f"{gname}__{sk}"] = str(instances[i].get(sk, ""))
+            else:
+                for sk in sub_keys:
+                    row[f"{gname}__{sk}"] = ""
+        rows.append(row)
+
+    return rows
 
 
 def append_ft_rows_to_sheet(all_rows):
@@ -1352,6 +1390,12 @@ def extract_ft_batch():
         template_content = template_file.read().decode('utf-8')
         fields, _ = load_xml_template(template_content)
 
+        # Collecter les groupes avec parLigne=oui
+        par_ligne_groups = set()
+        for f in fields:
+            if f.get("type") == "groupe" and f.get("parLigne"):
+                par_ligne_groups.add(f["nom"])
+
         sources = request.files.getlist('sources')
         if not sources:
             return {"error": "Fichiers requis"}, 400
@@ -1426,16 +1470,18 @@ def extract_ft_batch():
                     for img in named_images:
                         (img_dir / img["filename"]).write_bytes(img["data"])
 
-                # 3. Collecter la ligne pour le Sheet (avec liens Drive)
-                row = extraction_to_row(extractions, sf.filename)
+                # 3. Collecter les lignes pour le Sheet (avec liens Drive)
+                rows = extraction_to_row(extractions, sf.filename, par_ligne_groups)
                 # Supprimer les champs email/réclamation
-                for unwanted in ('motif', 'type_sollicitation', 'nature_demande', 'nature_reclamation'):
-                    row.pop(unwanted, None)
-                # Remplacer les champs image (oui/non) par les liens Drive
+                for row in rows:
+                    for unwanted in ('motif', 'type_sollicitation', 'nature_demande', 'nature_reclamation'):
+                        row.pop(unwanted, None)
+                # Remplacer les champs image par les liens Drive (sur chaque ligne)
                 if drive_links:
-                    for field_name, links in drive_links.items():
-                        row[field_name] = "\n".join(links)
-                all_rows.append(row)
+                    for row in rows:
+                        for field_name, links in drive_links.items():
+                            row[field_name] = "\n".join(links)
+                all_rows.extend(rows)
 
                 results.append({
                     "source": sf.filename, "status": "success",
