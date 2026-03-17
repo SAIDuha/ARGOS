@@ -778,36 +778,60 @@ def upload_image_to_drive(image_bytes, filename, mime_type="image/png"):
         return None
 
 
-def extraction_to_row(extractions, source_filename):
+def extraction_to_rows(extractions, source_filename):
     """
-    Transforme le dict d'extractions Gemini en un OrderedDict plat.
-    - Champs simples → une colonne par champ
-    - Groupes (champRGRS) → une colonne par sous-champ, instances jointes par " | "
-    - Les champs vides sont ignorés (pas de colonne créée)
+    Transforme les extractions Gemini en PLUSIEURS lignes pour le Sheet.
+    - Champs simples → seulement sur la première ligne
+    - Groupes (champRGRS) → une ligne par instance (éclatés)
+    Retourne une liste de dicts (1 dict = 1 ligne Sheet).
     """
-    row = {"fichier_source": source_filename}
+    # 1. Collecter les champs simples
+    simple_fields = {"fichier_source": source_filename}
+    for ext in extractions.get("extractions", []):
+        nom = ext.get("nom", "")
+        if ext.get("type") != "groupe":
+            v = ext.get("valeur_defaut", "")
+            val = ", ".join(v) if isinstance(v, list) else str(v) if v else ""
+            if val:
+                simple_fields[nom] = val
+
+    # 2. Collecter les groupes avec leurs instances
+    groups = {}  # nom_groupe → [{"sous_champ": "val", ...}, ...]
     for ext in extractions.get("extractions", []):
         nom = ext.get("nom", "")
         if ext.get("type") == "groupe":
             instances = ext.get("instances", [])
             if instances:
-                sub_keys = []
-                for inst in instances:
-                    for k in inst:
-                        if k not in sub_keys:
-                            sub_keys.append(k)
-                for sk in sub_keys:
-                    col_name = f"{nom}__{sk}"
-                    values = [str(inst.get(sk, "")) for inst in instances]
-                    joined = " | ".join(v for v in values if v)
-                    if joined:
-                        row[col_name] = joined
+                groups[nom] = instances
+
+    # 3. Trouver le nombre max d'instances parmi tous les groupes
+    max_instances = max((len(insts) for insts in groups.values()), default=0)
+    num_rows = max(1, max_instances)
+
+    # 4. Construire les lignes
+    rows = []
+    for i in range(num_rows):
+        row = {}
+
+        # Champs simples : seulement sur la première ligne
+        if i == 0:
+            row.update(simple_fields)
         else:
-            v = ext.get("valeur_defaut", "")
-            val = ", ".join(v) if isinstance(v, list) else str(v) if v else ""
-            if val:
-                row[nom] = val
-    return row
+            row["fichier_source"] = ""  # ligne vide pour les champs simples
+
+        # Groupes : une instance par ligne
+        for group_name, instances in groups.items():
+            if i < len(instances):
+                inst = instances[i]
+                for k, v in inst.items():
+                    col_name = f"{group_name}__{k}"
+                    val = str(v) if v else ""
+                    if val:
+                        row[col_name] = val
+
+        rows.append(row)
+
+    return rows
 
 
 def append_ft_rows_to_sheet(all_rows):
@@ -1422,16 +1446,17 @@ def extract_ft_batch():
                     for img in named_images:
                         (img_dir / img["filename"]).write_bytes(img["data"])
 
-                # 3. Collecter la ligne pour le Sheet (avec liens Drive)
-                row = extraction_to_row(extractions, sf.filename)
+                # 3. Collecter les lignes pour le Sheet (avec liens Drive)
+                rows = extraction_to_rows(extractions, sf.filename)
                 # Supprimer les champs email/réclamation qui n'ont rien à faire en mode FT
-                for unwanted in ('motif', 'type_sollicitation', 'nature_demande', 'nature_reclamation'):
-                    row.pop(unwanted, None)
-                # Remplacer les champs image (oui/non) par les liens Drive
-                # Un lien par ligne dans la cellule pour que chacun soit cliquable
-                for field_name, links in drive_links.items():
-                    row[field_name] = "\n".join(links)
-                all_rows.append(row)
+                for row in rows:
+                    for unwanted in ('motif', 'type_sollicitation', 'nature_demande', 'nature_reclamation'):
+                        row.pop(unwanted, None)
+                # Remplacer les champs image (oui/non) par les liens Drive (première ligne seulement)
+                if rows and drive_links:
+                    for field_name, links in drive_links.items():
+                        rows[0][field_name] = "\n".join(links)
+                all_rows.extend(rows)
 
                 results.append({
                     "source": sf.filename, "status": "success",
