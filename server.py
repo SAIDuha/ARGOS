@@ -782,20 +782,37 @@ def extraction_to_row(extractions, source_filename):
     """
     Transforme le dict d'extractions Gemini en un dict plat (1 ligne Sheet).
     - Champs simples → une colonne par champ
-    - Groupes (champRGRS) → une colonne par sous-champ, instances séparées par des retours à la ligne
-    - Les champs vides sont ignorés (pas de colonne créée)
+    - Groupe 'nomenclature' → UNE SEULE colonne fusionnée
+      Format: [ acc || fourn || desc || coloris ] par ligne
+    - Autres groupes → une colonne par sous-champ (séparés par retour à la ligne)
+    - Les champs vides sont ignorés
     """
     row = {"fichier_source": source_filename}
     for ext in extractions.get("extractions", []):
         nom = ext.get("nom", "")
         if ext.get("type") == "groupe":
             instances = ext.get("instances", [])
-            if instances:
-                sub_keys = []
+            if not instances:
+                continue
+
+            sub_keys = []
+            for inst in instances:
+                for k in inst:
+                    if k not in sub_keys:
+                        sub_keys.append(k)
+
+            if nom == "nomenclature":
+                # Nomenclature → une seule colonne avec blocs
+                blocks = []
                 for inst in instances:
-                    for k in inst:
-                        if k not in sub_keys:
-                            sub_keys.append(k)
+                    parts = [str(inst.get(sk, "")) for sk in sub_keys]
+                    block = "[ " + " || ".join(parts) + " ]"
+                    blocks.append(block)
+                joined = "\n".join(blocks)
+                if joined:
+                    row[nom] = joined
+            else:
+                # Autres groupes → colonnes séparées par sous-champ
                 for sk in sub_keys:
                     col_name = f"{nom}__{sk}"
                     values = [str(inst.get(sk, "")) for inst in instances]
