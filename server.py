@@ -1699,6 +1699,7 @@ def gmail_auth():
         flow = get_gmail_flow()
         url, state = flow.authorization_url(access_type='offline', prompt='consent')
         session['oauth_state'] = state
+        session['code_verifier'] = flow.code_verifier  # ← AJOUTE ÇA
         session.modified = True
         print(f"[OAuth] Auth initiated")
         return jsonify({"auth_url": url})
@@ -1717,6 +1718,7 @@ def oauth_callback():
             print(f"[OAuth] Error: {error}")
             return redirect('/?gmail_auth=error')
         flow = get_gmail_flow()
+        flow.code_verifier = session.pop('code_verifier', None)  # ← AJOUTE ÇA
         flow.fetch_token(authorization_response=request.url)
         creds = flow.credentials
         session['gmail_credentials'] = {
