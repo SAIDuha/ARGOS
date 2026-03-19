@@ -902,20 +902,46 @@
                     <div class="panel-title">Traitement Fiches Techniques</div>
                     <div class="cards-grid">
                         <div class="drop-card" id="ftSourceDropZone">
-                            <div class="card-header">
-                                <div class="card-picto p-teal">
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
-                                </div>
-                                <div><div class="card-label">Fiches techniques</div><div class="card-desc">PDF · Image · Sélection multiple</div></div>
-                            </div>
-                            <input type="file" id="ftSourceFiles" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" multiple hidden>
-                            <button class="btn btn-teal" onclick="document.getElementById('ftSourceFiles').click()">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                                Parcourir
-                            </button>
-                            <div class="drag-hint">ou glisser-déposer ici</div>
-                            <div class="file-chip" id="ftSourceFileInfo"></div>
-                        </div>
+    <div class="card-header">
+        <div class="card-picto p-teal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <div><div class="card-label">Fiches techniques</div><div class="card-desc">PDF · Image · Fichiers ou dossier complet</div></div>
+    </div>
+    <input type="file" id="ftSourceFiles" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.doc,.docx,.txt,.md" multiple hidden>
+    <input type="file" id="ftFolderInput" webkitdirectory directory multiple hidden>
+    <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-teal" onclick="document.getElementById('ftSourceFiles').click()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Fichiers
+        </button>
+        <button class="btn btn-navy" onclick="openFolderPicker()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Dossier
+        </button>
+    </div>
+    <div class="drag-hint">ou glisser-déposer ici</div>
+    <div class="file-chip" id="ftSourceFileInfo"></div>
+    <!-- Modal filtre dossier -->
+    <div id="ftFolderFilter" hidden style="margin-top:14px;padding:14px;background:var(--blue-pale);border:2px solid var(--navy-mid);position:relative;">
+        <div style="font-family:'Oswald',sans-serif;font-size:0.78rem;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:var(--navy);margin-bottom:10px;">
+            Filtrer les fichiers du dossier
+        </div>
+        <div style="font-size:0.77rem;color:#6B7DA0;margin-bottom:12px;" id="ftFolderSummary"></div>
+        <label style="display:block;font-family:'Oswald',sans-serif;font-size:0.68rem;letter-spacing:3px;color:var(--navy);text-transform:uppercase;margin-bottom:6px;">
+            Terme dans le nom du fichier <span style="font-weight:300;color:#9AAABF">(laisser vide = tout prendre)</span>
+        </label>
+        <input type="text" id="ftFilterTerm" placeholder="ex : ft" style="width:100%;padding:9px 12px;border:2px solid var(--blue-light);background:var(--white);color:var(--navy);font-family:'Roboto',sans-serif;font-size:0.88rem;margin-bottom:6px;">
+        <div style="font-size:0.75rem;color:var(--orange);font-weight:500;margin-bottom:12px;" id="ftFilterPreview"></div>
+        <div style="display:flex;gap:10px;">
+            <button class="btn btn-teal" onclick="applyFolderFilter()" style="padding:8px 20px;">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg>
+                Valider
+            </button>
+            <button class="btn btn-orange" onclick="cancelFolderFilter()" style="padding:8px 20px;">✕ Annuler</button>
+        </div>
+    </div>
+</div>
                         <div class="drop-card" id="ftTemplateDropZone">
                             <div class="card-header">
                                 <div class="card-picto p-orange">
@@ -1064,6 +1090,85 @@ async function connectGmail(){try{const r=await fetch('/api/gmail/auth',{credent
 async function disconnectGmail(){try{await fetch('/api/gmail/disconnect',{credentials:'include'});S.gmailConnected=false;uiG(false);}catch(e){}}
 function uiG(ok){const c=$('gmailCard'),b=$('gmailConnectBtn'),s=$('gmailStatus'),l=$('labelInput');if(ok){c.classList.add('connected');b.style.background='var(--green)';b.style.borderColor='var(--green)';$('gmailBtnText').textContent='Connecté';s.classList.add('visible');l.style.display='block';}else{c.classList.remove('connected');b.style.background='#C0392B';b.style.borderColor='#C0392B';$('gmailBtnText').textContent='Se connecter';s.classList.remove('visible');l.style.display='none';}upd();}
 async function checkSheetStatus(){try{const r=await fetch('/api/sheet/status');const d=await r.json();const el=$('ftSheetStatus');if(d.has_sheet){$('ftSheetLink').href=d.url;el.hidden=false;}else{el.hidden=true;}}catch(e){$('ftSheetStatus').hidden=true;}}
+
+// ── FOLDER PICKER ──
+let _folderAllFiles = []; // tous les fichiers du dossier (récursif)
+
+function openFolderPicker() {
+    $('ftFolderInput').click();
+}
+
+// Quand le dossier est sélectionné
+$('ftFolderInput').addEventListener('change', function(e) {
+    const allFiles = Array.from(e.target.files);
+    if (!allFiles.length) return;
+
+    // Filtrer uniquement les PDFs (les sous-dossiers sont déjà aplatis par webkitdirectory)
+    _folderAllFiles = allFiles.filter(f => f.name.toLowerCase().endsWith('.pdf'));
+
+    // Compter les sous-dossiers uniques
+    const folders = new Set();
+    allFiles.forEach(f => {
+        const path = f.webkitRelativePath || '';
+        const parts = path.split('/');
+        if (parts.length > 2) { // racine/sous-dossier/fichier
+            folders.add(parts.slice(0, -1).join('/'));
+        }
+    });
+
+    const rootName = allFiles[0]?.webkitRelativePath?.split('/')[0] || 'dossier';
+    $('ftFolderSummary').innerHTML =
+        `📁 <strong>${rootName}</strong> — ${_folderAllFiles.length} PDF(s) trouvé(s)` +
+        (folders.size > 0 ? ` dans ${folders.size + 1} dossier(s)` : '') +
+        `<br><span style="font-size:0.72rem;color:#9AAABF">${allFiles.length} fichiers total scannés (récursif)</span>`;
+
+    // Afficher le panneau filtre
+    $('ftFolderFilter').hidden = false;
+    $('ftFilterTerm').value = '';
+    updateFilterPreview();
+
+    // Live preview quand l'utilisateur tape
+    $('ftFilterTerm').oninput = updateFilterPreview;
+});
+
+function updateFilterPreview() {
+    const term = $('ftFilterTerm').value.trim().toLowerCase();
+    if (!term) {
+        $('ftFilterPreview').textContent = `→ ${_folderAllFiles.length} PDF(s) seront traités (aucun filtre)`;
+    } else {
+        const matched = _folderAllFiles.filter(f => f.name.toLowerCase().includes(term));
+        $('ftFilterPreview').textContent = `→ ${matched.length} PDF(s) correspondent au filtre "${term}"`;
+        if (matched.length > 0 && matched.length <= 5) {
+            $('ftFilterPreview').textContent += ' : ' + matched.map(f => f.name).join(', ');
+        }
+    }
+}
+
+function applyFolderFilter() {
+    const term = $('ftFilterTerm').value.trim().toLowerCase();
+    let filtered;
+    if (term) {
+        filtered = _folderAllFiles.filter(f => f.name.toLowerCase().includes(term));
+    } else {
+        filtered = [..._folderAllFiles];
+    }
+
+    if (!filtered.length) {
+        $('ftFilterPreview').textContent = '⚠ Aucun fichier ne correspond — modifie le filtre';
+        return;
+    }
+
+    // Injecter dans le state FT comme si c'étaient des fichiers sélectionnés
+    hftSrc(filtered);
+    $('ftFolderFilter').hidden = true;
+    _folderAllFiles = [];
+}
+
+function cancelFolderFilter() {
+    $('ftFolderFilter').hidden = true;
+    _folderAllFiles = [];
+}
+
 </script>
 </body>
 </html>
